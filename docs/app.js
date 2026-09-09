@@ -11,6 +11,7 @@ const state = {
   overlay: 'none',      // none | territory | gap | chamber
   thinking: false,
   selfPlay: false,
+  useSearch: true,      // MCTS on by default; 'Score only' turns it off
   passes: 0,
   series: [],           // per-move record for the plots
   lastMove: -1,
@@ -252,7 +253,8 @@ function humanPlay(i) {
   drawBoard(); refreshPanels();
   if (removed.length) setStatus(`You captured <strong>${removed.length}</strong>. Thinking&hellip;`);
   else setStatus('Thinking&hellip;');
-  setTimeout(botMove, 30);
+  // let the browser paint "Thinking" before the search takes the main thread
+  setTimeout(botMove, 50);
 }
 
 function botMove() {
@@ -268,7 +270,19 @@ function botMove() {
     shortlist: state.board.n >= 19 ? 10 : 12,
     replyWidth: state.board.n >= 19 ? 10 : 12,
   };
-  const mv = chooseMove(state.board, colour, p, opts);
+  let mv;
+  if (state.useSearch) {
+    mv = mctsChooseMove(state.board, colour, p, {
+      budgetMs: +el('strength').value,
+      wTerritory: opts.wTerritory,
+      wCapture: opts.wCapture,
+      candidates: state.board.n >= 19 ? 30 : 40,
+    });
+    showSearchStats(mctsChooseMove.lastStats);
+  } else {
+    mv = chooseMove(state.board, colour, p, opts);
+    showSearchStats(null);
+  }
   if (mv < 0) {
     state.passes++;
     state.toPlay = -colour;
@@ -292,6 +306,17 @@ function botMove() {
     : `<strong>${who}</strong> played. Your move.`);
 
   if (state.selfPlay) setTimeout(botMove, 120);
+}
+
+function showSearchStats(st) {
+  if (!st) {
+    for (const id of ['tIters', 'tWin', 'tVisits', 'tKids']) el(id).textContent = '\u2014';
+    return;
+  }
+  el('tIters').textContent = st.iterations.toLocaleString();
+  el('tWin').textContent = (100 * st.winRate).toFixed(0) + '%';
+  el('tVisits').textContent = st.visits.toLocaleString();
+  el('tKids').textContent = st.children;
 }
 
 function undo() {
@@ -344,6 +369,18 @@ function wire() {
     setTimeout(botMove, 30);
   });
   el('undo').addEventListener('click', undo);
+
+  el('engineMcts').addEventListener('click', () => {
+    state.useSearch = true;
+    el('engineMcts').classList.add('primary');
+    el('enginePolicy').classList.remove('primary');
+  });
+  el('enginePolicy').addEventListener('click', () => {
+    state.useSearch = false;
+    el('enginePolicy').classList.add('primary');
+    el('engineMcts').classList.remove('primary');
+    showSearchStats(null);
+  });
 
   el('selfPlay').addEventListener('click', () => {
     state.selfPlay = !state.selfPlay;

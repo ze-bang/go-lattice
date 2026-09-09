@@ -59,7 +59,11 @@ Go is the system that tells you which local constraint to study.
 paper/       the write-up (LaTeX + PDF, 21pp)
 golattice/   Python reference implementation
 tests/       the theorems, tested — Python and JS agree numerically
-docs/        the interactive bot (GitHub Pages)
+docs/
+  physics.js    the model: Laplacian, forests, chambers, move score
+  fastboard.js  union-find board built for playouts
+  mcts.js       tree search, with the physics score as prior
+  index.html    the page
 ```
 
 ## The bot
@@ -99,7 +103,54 @@ than opaque weights.
 
 Live panels: liberty gap per group, `log det(L+R)` per colour, β₀ of empty space, the
 enclosure count ℰ, and territory. Board overlays show chambers, ownership, and liberty
-gap as heat. Roughly 13 ms per move on 9×9 and 35 ms on 19×19.
+gap as heat.
+
+## Search
+
+The score above is now the **prior**, not the whole engine. MCTS is importance sampling
+of the game tree, which sits comfortably on a statistical-mechanics model:
+
+```
+PUCT(a) = Q(a) + c · P(a) · √N / (1 + n(a))
+```
+
+`P` is a softmax of the physics score, so the sliders decide where the search looks
+first. `Q` comes from rolling the position out to the end thousands of times, so they
+no longer have the last word. Rollouts use only atari, captures and eyes — the same
+liberty structure the plots draw, counted rather than diagonalised.
+
+**It needed a faster board first.** `Board` in `physics.js` clones itself to answer
+`isLegal`, making legality O(N) and a playout worse than O(N²) — 11.9 ms for one 9×9
+playout, about 17 in a 200 ms budget, where MCTS wants thousands. `fastboard.js` is the
+standard representation instead: union-find chains with liberties maintained
+incrementally as *pseudo-liberties*, plus their sum and sum of squares. That last part is
+what makes atari exact — for a multiset with count `p`, sum `s` and sum-of-squares `q`,
+Cauchy–Schwarz gives `s² ≤ pq` with equality iff every element is identical, so
+
+```
+real liberties == 0  ⟺  p == 0
+real liberties == 1  ⟺  s² == p·q,  the point being s/p
+```
+
+| | before | after | playouts / 500 ms |
+|---|---|---|---|
+| 9×9 | 11.9 ms | **0.110 ms** | 4,566 |
+| 13×13 | 79.1 ms | **0.276 ms** | 1,815 |
+| 19×19 | 452 ms | **1.079 ms** | 463 |
+
+Search against the raw score, 250 ms per move on 9×9, alternating colours:
+
+```
+MCTS won 10/10       margins: 15, 11, 11, 17, 23, 11, 9, 35, 13, 31
+```
+
+`Score only` on the page turns the search off if you want to play the bare model again.
+19×19 is the weak case — a few hundred playouts is thin for a board that size.
+
+Incremental liberty bookkeeping fails silently, so `tests/test_fastboard.mjs` plays ~140
+random games in lockstep against the reference board and compares legality **at every
+point on every move**, plus ko, liberty class, the atari point, and the area score
+against `topology.js`.
 
 ## Running the Python side
 

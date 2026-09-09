@@ -547,8 +547,17 @@ function chooseMove(board, colour, p, opts = {}) {
   if (!scored.length) return -1;
 
   const best = Math.min(...scored.map(x => x[1]));
-  if (best > (opts.passThreshold ?? 2.5)) return -1;   // nothing worth a stone
-  if (temperature <= 1e-9) return scored.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
+
+  /* Whether to pass has to be judged on the move's OWN score, not on the
+   * minimax value. scoreWithReply is own - gamma * bestReply, so when the
+   * opponent has a strong answer the second term ADDS several points, and every
+   * move in a contested position looks bad in absolute terms. Comparing that
+   * against a fixed threshold made the bot pass around move 20 of a live game. */
+  const rank = scored.reduce((a, b) => (b[1] < a[1] ? b : a));
+  const ownBest = moveScore(board, rank[0], colour, p, wTerr, wCap);
+  if (!Number.isFinite(ownBest) || ownBest > (opts.passThreshold ?? 2.5)) return -1;
+
+  if (temperature <= 1e-9) return rank[0];
 
   const weights = scored.map(([, sc]) => Math.exp(-(sc - best) / temperature));
   const total = weights.reduce((a, b) => a + b, 0);

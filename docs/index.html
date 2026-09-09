@@ -136,9 +136,18 @@
             <button id="undo">Undo</button>
             <button id="selfPlay">Watch it play itself</button>
             <select id="size">
-              <option value="9">9 &times; 9</option>
-              <option value="13" selected>13 &times; 13</option>
+              <option value="9" selected>9 &times; 9</option>
+              <option value="13">13 &times; 13</option>
               <option value="19">19 &times; 19</option>
+            </select>
+          </div>
+          <div class="row">
+            <button class="primary" id="engineMcts">Search</button>
+            <button id="enginePolicy">Score only</button>
+            <select id="strength">
+              <option value="150">quick &mdash; 0.15s</option>
+              <option value="400" selected>normal &mdash; 0.4s</option>
+              <option value="1200">strong &mdash; 1.2s</option>
             </select>
           </div>
           <div class="row">
@@ -234,6 +243,23 @@
     <!-- =========================== physics =========================== -->
     <div class="stack" style="margin-top:0">
 
+      <div class="card" id="searchCard">
+        <h2>Search</h2>
+        <div class="tiles">
+          <div class="tile"><div class="k">playouts</div><div class="v" id="tIters">&mdash;</div></div>
+          <div class="tile"><div class="k">it thinks it wins</div><div class="v" id="tWin">&mdash;</div></div>
+          <div class="tile"><div class="k">visits on move</div><div class="v" id="tVisits">&mdash;</div></div>
+          <div class="tile"><div class="k">moves considered</div><div class="v" id="tKids">&mdash;</div></div>
+        </div>
+        <p class="note">
+          The physics score is the <em>prior</em>: it decides where the search looks first, through
+          <em>P</em> in PUCT&nbsp;= <em>Q</em>&nbsp;+&nbsp;<em>c&thinsp;P</em>&thinsp;&radic;<em>N</em>&thinsp;/&thinsp;(1+<em>n</em>).
+          <em>Q</em> then comes from playing the position out to the end thousands of times, so the
+          sliders still steer it but no longer have the last word. Turn search off to play the raw
+          score again &mdash; it is much weaker.
+        </p>
+      </div>
+
       <div class="card">
         <h2>Complement topology</h2>
         <div class="tiles">
@@ -289,6 +315,8 @@
 </div>
 
 <script src="physics.js"></script>
+<script src="fastboard.js"></script>
+<script src="mcts.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
