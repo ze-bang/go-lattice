@@ -1,0 +1,1749 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{bm}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+
+\title{A Cohomological Statistical Mechanics of Go:\\
+Local Constraints, Rooted Forests, Loop Gases, and Emergent Enclosure}
+\author{Zhengbang Zhou}
+\date{}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{conjecture}{Conjecture}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The game of Go suggests an unusual statistical-mechanics problem. Its microscopic degrees of freedom are entirely local---a site is Black, White, or empty, and stones interact through nearest-neighbor connectivity---yet its meaningful macroscopic objects are intrinsically nonlocal: groups, liberties, eyes, enclosure, territory, and life. The central question of this note is whether these global structures can be understood as emergent geometric and topological observables of a locally constrained lattice system.
+
+A particularly useful formulation starts from a spin-1 lattice gas,
+\[
+s_i\in\{-1,0,+1\},
+\]
+and augments an ordinary Blume--Emery--Griffiths-type Hamiltonian with an exact representation of the Go liberty constraint. For each color, the graph of same-color stones has a graph Laplacian \(L_c\). Stones adjacent to empty sites receive a diagonal root weight \(R_c\). Then
+\[
+\det(L_c+R_c)>0
+\]
+if and only if every connected group of color \(c\) possesses at least one liberty. Moreover, this determinant is the partition function of rooted spanning forests. Thus the rule ``every group must reach a liberty,'' which appears globally nonlocal, admits a local auxiliary representation in terms of directed forests and, after integrating those degrees of freedom out, becomes a Laplacian determinant.
+
+The resulting model sits at an intersection of several established areas of mathematical physics: spin-1 lattice gases, Peierls contour gases, \(O(n)\) loop models, bootstrap and kinetically constrained dynamics, random-cluster models, spanning forests, fermionic/supersymmetric field theories, algebraic topology, and persistent homology. The interesting claim is therefore not that Go is an Ising model. The more ambitious proposal is that Go provides a natural example of a locally constrained system in which complement topology---inside versus outside, enclosed chambers, and eventually territory---becomes a dynamically meaningful macroscopic degree of freedom.
+\end{abstract}
+
+\section{What exactly are we trying to explain?}
+
+There are three progressively stronger questions.
+
+The weakest question is whether a lattice Hamiltonian can assign plausible energies to Go positions. That has essentially been done in various Ising-inspired and graphical-model approaches.
+
+The more interesting question is whether one can encode the actual structural constraint of Go groups rather than merely producing a heuristic evaluation function.
+
+And the strongest question is
+\[
+\boxed{
+\text{Can local microscopic constraints generate a macroscopic notion of enclosure?}
+}
+\]
+
+The desired chain is
+\[
+\text{local adjacency}
+\longrightarrow
+\text{connectivity}
+\longrightarrow
+\text{survival constraint}
+\longrightarrow
+\text{extended barriers}
+\longrightarrow
+\text{components of the complement}
+\longrightarrow
+\text{enclosed area}.
+\]
+
+The central physics question then becomes whether there is a regime in which these enclosed regions become macroscopic and whether the onset of such enclosure behaves like a genuine phase transition.
+
+\section{The microscopic state space}
+
+Let
+\[
+\Lambda_L=\{1,\ldots,L\}^2
+\]
+be an \(L\times L\) square lattice with nearest-neighbor edges. The physical Go board corresponds to \(L=19\), but statistical mechanics requires allowing \(L\to\infty\).
+
+Associate to every site \(i\in\Lambda_L\) a spin-1 variable
+\[
+s_i\in\{-1,0,+1\},
+\]
+with
+\[
+s_i=
+\begin{cases}
++1,&\text{Black stone},\\
+-1,&\text{White stone},\\
+0,&\text{empty}.
+\end{cases}
+\]
+
+Two useful derived variables are
+\[
+n_i=s_i^2
+\]
+and
+\[
+m_i=s_i.
+\]
+
+The occupation variable \(n_i\in\{0,1\}\) says whether the site contains a stone, while \(m_i\) carries the color.
+
+The corresponding projectors are
+\[
+P_i^B=\frac{s_i^2+s_i}{2},
+\qquad
+P_i^W=\frac{s_i^2-s_i}{2},
+\qquad
+P_i^0=1-s_i^2.
+\]
+
+\section{The natural unconstrained Hamiltonian: Blume--Emery--Griffiths}
+
+The most natural standard condensed-matter starting point is not the ordinary Ising model but the spin-1 Blume--Emery--Griffiths family,
+\[
+\boxed{
+H_0[s]
+=
+-J\sum_{\langle ij\rangle}s_i s_j
+-K\sum_{\langle ij\rangle}s_i^2s_j^2
++\Delta\sum_i s_i^2
+-h\sum_i s_i.
+}
+\]
+
+For two adjacent stones of the same color,
+\[
+s_i s_j=+1,
+\]
+so their pair energy is
+\[
+-J-K.
+\]
+
+For neighboring stones of opposite colors,
+\[
+s_i s_j=-1,
+\]
+giving
+\[
++J-K.
+\]
+
+A stone-empty pair receives neither interaction.
+
+Thus \(J\) controls color alignment, while \(K\) controls occupation clustering independently of color. The crystal-field parameter \(\Delta\) is a chemical potential for putting stones on the board, and \(h\) produces a Black/White bias.
+
+\section{Groups and liberties}
+
+For a fixed color \(c\in\{+1,-1\}\), define
+\[
+V_c(s)=\{i:s_i=c\}.
+\]
+
+Let \(G_c(s)\) be the graph whose vertices are \(V_c(s)\) and whose edges join nearest-neighbor stones of the same color. Connected components of \(G_c\) are exactly Go groups.
+
+For a stone \(i\), define its number of immediately adjacent empty sites,
+\[
+\ell_i(s)
+=
+\sum_{j\sim i}P_j^0.
+\]
+
+A group \(C\subseteq V_c\) has at least one liberty exactly when
+\[
+\sum_{i\in C}\ell_i>0.
+\]
+
+The important point is that the local quantity \(\ell_i\) is easy to compute, but
+\[
+\boxed{
+\text{Every connected component contains some }i\text{ with }\ell_i>0
+}
+\]
+is a global graph property.
+
+\section{Turning the liberty rule into a Laplacian determinant}
+
+Let \(L_c\) be the weighted graph Laplacian of \(G_c\). For simplicity take unit edge weights:
+\[
+(L_c)_{ij}
+=
+\begin{cases}
+\deg_c(i),&i=j,\\
+-1,&i\sim j,\ s_i=s_j=c,\\
+0,&\text{otherwise}.
+\end{cases}
+\]
+
+Now define a diagonal matrix
+\[
+R_c=\operatorname{diag}(r_i),
+\]
+where
+\[
+r_i=\lambda\,\ell_i,
+\qquad \lambda>0.
+\]
+
+A stone adjacent to one or more liberties therefore receives positive root weight; a stone with no adjacent liberty receives \(r_i=0\).
+
+Define
+\[
+\boxed{
+M_c=L_c+R_c.
+}
+\]
+
+\begin{proposition}
+\[
+\det M_c>0
+\iff
+\text{every connected group of color }c\text{ has at least one liberty}.
+\]
+\end{proposition}
+
+\begin{proof}
+For any real vector \(x\) indexed by stones of color \(c\),
+\[
+x^TM_cx
+=
+\sum_{\langle ij\rangle\in G_c}(x_i-x_j)^2
++
+\sum_i r_i x_i^2.
+\]
+
+Every term is nonnegative. Therefore \(x^TM_cx=0\) requires \(x_i=x_j\) along every same-color edge, so \(x\) is constant on every connected component.
+
+The second term additionally requires \(x_i=0\) wherever \(r_i>0\). Thus a nonzero zero-mode exists precisely when some connected component contains no vertex with \(r_i>0\).
+
+But \(r_i>0\) means that stone touches an empty site. Hence \(M_c\) is nonsingular exactly when every group possesses a liberty.
+\end{proof}
+
+\section{Why the determinant is more than an algebraic trick}
+
+The same determinant has a combinatorial meaning through the matrix-forest theorem.
+
+Add a ghost vertex \(\star\). Connect every stone \(i\) to \(\star\) with edge weight \(r_i\).
+
+A spanning tree of the enlarged graph becomes, after deleting \(\star\), a forest in which every tree component is attached to one permitted root.
+
+In our interpretation,
+\[
+\boxed{
+\text{every stone follows a forest path toward a liberty.}
+}
+\]
+
+For a single isolated stone,
+\[
+L=[0],
+\qquad
+R=[r],
+\]
+so
+\[
+\det(L+R)=r.
+\]
+
+For two connected stones,
+\[
+L=
+\begin{pmatrix}
+1&-1\\
+-1&1
+\end{pmatrix},
+\qquad
+R=
+\begin{pmatrix}
+r_1&0\\
+0&r_2
+\end{pmatrix},
+\]
+and therefore
+\[
+\det(L+R)=r_1+r_2+r_1r_2.
+\]
+
+Again, the determinant vanishes only when both stones lack liberties.
+
+\section{An exact statistical-mechanical partition function}
+
+Now define
+\[
+D_c[s]=\det M_c[s].
+\]
+
+Because \(M_c\) is positive semidefinite,
+\[
+D_c[s]\geq0.
+\]
+
+Consider
+\[
+\boxed{
+Z_\alpha
+=
+\sum_{\{s_i\}}
+e^{-\beta H_0[s]}
+\prod_{c=\pm1}D_c[s]^\alpha.
+}
+\]
+
+Call this provisionally the Go--spanning-forest model.
+
+As
+\[
+\alpha\rightarrow0^+,
+\]
+for a legal configuration \(D_c>0\), hence
+\[
+D_c^\alpha\rightarrow1,
+\]
+while for an illegal configuration \(D_c=0\), hence
+\[
+D_c^\alpha=0.
+\]
+
+Thus
+\[
+\boxed{
+\lim_{\alpha\to0^+}
+\prod_cD_c^\alpha
+=
+\mathbf 1_{\rm all\ groups\ have\ liberties}.
+}
+\]
+
+Consequently,
+\[
+\boxed{
+Z_{0^+}
+=
+\sum_{\text{liberty-legal }s}
+e^{-\beta H_0[s]}.
+}
+\]
+
+At \(\alpha=1\), legal boards receive a weight proportional to the number of rooted-forest certificates connecting their stones to liberties.
+
+For general \(\alpha\),
+\[
+F_{\rm forest}
+=
+-\frac{\alpha}{\beta}
+\sum_c\log\det M_c
+\]
+acts as a liberty entropy.
+
+\section{The connection to spanning-forest field theory}
+
+For Grassmann variables \(\psi_i,\bar\psi_i\),
+\[
+\det M
+=
+\int
+D\bar\psi\,D\psi\,
+e^{-\bar\psi M\psi}.
+\]
+
+Therefore the \(\alpha=1\) model can be written schematically as
+\[
+Z_1
+=
+\sum_s
+\int
+D\bar\psi_+D\psi_+
+D\bar\psi_-D\psi_-
+\,
+e^{-S[s,\psi_\pm]},
+\]
+with
+\[
+S
+=
+\beta H_0[s]
++
+\bar\psi_+M_+[s]\psi_+
++
+\bar\psi_-M_-[s]\psi_-.
+\]
+
+Thus the spin-1 lattice gas becomes coupled to fermionic auxiliary fields.
+
+In a large stone domain \(\Omega_c\), one expects a coarse-grained operator resembling
+\[
+M_c
+\rightsquigarrow
+-\nabla^2_{\Omega_c}
+\]
+with absorbing or mixed boundary conditions on portions of the boundary that touch liberties.
+
+A continuum interfacial free energy may therefore contain
+\[
+F[\Omega_c]
+=
+\sigma|\partial\Omega_c|
+-\Delta f|\Omega_c|
+-\alpha T\log\det(-\nabla^2_{\Omega_c})
++\cdots.
+\]
+
+\section{The empty-space complex}
+
+Let \(E_s\) denote the graph consisting of empty lattice sites and nearest-neighbor edges between them.
+
+Its zeroth cohomology is
+\[
+H^0(E_s;\Bbbk).
+\]
+
+For a finite graph,
+\[
+\dim H^0(E_s;\Bbbk)
+=
+\beta_0(E_s)
+=
+\#\{\text{connected empty regions}\}.
+\]
+
+If
+\[
+E_s=D_1\sqcup\cdots\sqcup D_r,
+\]
+then one may choose the canonical indicator cocycles
+\[
+\chi_{D_a}(i)
+=
+\begin{cases}
+1,&i\in D_a,\\
+0,&i\notin D_a.
+\end{cases}
+\]
+
+Each
+\[
+[\chi_{D_a}]\in H^0(E_s)
+\]
+represents one empty chamber.
+
+\section{The physical boundary and the barrier complex}
+
+A Go territory may lie against the edge or in a corner. The physical boundary of the board acts as part of the enclosure.
+
+Represent the board as a topological disk
+\[
+X\simeq D^2.
+\]
+
+Thicken stones slightly into two-dimensional cells and let
+\[
+K_s
+\]
+denote their union.
+
+Now define the barrier complex
+\[
+\boxed{
+B_s=K_s\cup\partial X.
+}
+\]
+
+The connected components of
+\[
+X\setminus K_s
+\]
+are the empty chambers.
+
+Because the physical boundary \(\partial X\) belongs to \(B_s\), a stone arc connecting two portions of the board edge can generate a closed barrier together with the intervening piece of \(\partial X\).
+
+\section{Alexander duality: why loops create chambers}
+
+For a compact, sufficiently regular subset \(B\subset S^2\), Alexander duality gives
+\[
+\widetilde H_i(S^2-B;\Bbbk)
+\cong
+\widetilde H^{1-i}(B;\Bbbk).
+\]
+
+For \(i=0\),
+\[
+\boxed{
+\widetilde H_0(S^2-B)
+\cong
+\widetilde H^1(B).
+}
+\]
+
+Thus additional connected components of the complement correspond to first cohomology classes of the barrier.
+
+Applied to
+\[
+B_s=K_s\cup\partial X,
+\]
+the statement says approximately
+\[
+\boxed{
+\text{independent empty chambers}
+\longleftrightarrow
+\text{independent }H^1\text{ classes of the barrier}.
+}
+\]
+
+A convenient enclosure count is
+\[
+\mathcal E(s)=\beta_1(B_s)-1,
+\]
+where the subtraction removes the trivial cycle supplied by the board edge.
+
+\section{Ownership is topology plus a color boundary condition}
+
+For an empty component \(D\), define the set of colors of neighboring stones,
+\[
+C(D)
+=
+\{s_i\in\{-1,+1\}:
+i\text{ is adjacent to some }j\in D\}.
+\]
+
+Then define
+\[
+o(D)
+=
+\begin{cases}
++1,&C(D)=\{+1\},\\
+-1,&C(D)=\{-1\},\\
+0,&C(D)=\{-1,+1\},\\
+0,&C(D)=\varnothing.
+\end{cases}
+\]
+
+Let
+\[
+\Omega_E=\sum_{i:s_i=0}[i]
+\]
+be the empty-site 0-chain. Then
+\[
+\langle\chi_D,\Omega_E\rangle
+=
+|D|.
+\]
+
+A natural topological territory functional is
+\[
+\boxed{
+T[s]
+=
+\sum_{D\in\pi_0(E_s)}
+o(D)
+\langle\chi_D,\Omega_E\rangle.
+}
+\]
+
+Topology determines which regions exist, measure determines how large they are, and color boundary data determines who owns them.
+
+\section{Eyes as complement topology}
+
+Consider one connected stone group \(G\). Look at empty components whose stone boundary belongs entirely to \(G\).
+
+Define schematically
+\[
+N_{\rm eye}^{\rm top}(G)
+=
+\#\{
+D\subset E:
+\partial_{\rm stones}D\subseteq G
+\}.
+\]
+
+A group with two disjoint internal empty regions has
+\[
+N_{\rm eye}^{\rm top}\geq2.
+\]
+
+But a false eye may be a genuine geometric hole and still fail tactically. Therefore
+\[
+\boxed{
+\text{topological eye}
+\neq
+\text{dynamically protected eye}.
+}
+\]
+
+\section{The minimal physics benchmark: the Ising contour gas}
+
+Take ordinary Ising spins
+\[
+\tau_i=\pm1
+\]
+with
+\[
+H_{\rm Ising}
+=
+-J\sum_{\langle ij\rangle}\tau_i\tau_j.
+\]
+
+Fix \(+\) boundary conditions. For every bond joining opposite spins, draw an edge on the dual lattice.
+
+These dual edges form closed Peierls contours. The low-temperature partition function can be written
+\[
+\boxed{
+Z_+
+=
+e^{\beta JN_b}
+\sum_{\Gamma}
+e^{-2\beta J|\Gamma|},
+}
+\]
+where \(\Gamma\) runs over compatible closed contour configurations and \(|\Gamma|\) is total contour length.
+
+This gives an exact demonstration of
+\[
+\boxed{
+\text{nearest-neighbor local Hamiltonian}
+\longrightarrow
+\text{extended closed loops}.
+}
+\]
+
+\section{Perimeter versus area: territory as droplet physics}
+
+Add a magnetic field,
+\[
+H
+=
+-J\sum_{\langle ij\rangle}\tau_i\tau_j
+-h\sum_i\tau_i.
+\]
+
+A coarse-grained droplet free energy has the form
+\[
+\boxed{
+\Delta F(D)
+=
+\sigma P(D)-\Delta f A(D).
+}
+\]
+
+For a circular droplet,
+\[
+P=2\pi R,
+\qquad
+A=\pi R^2,
+\]
+so
+\[
+\Delta F(R)
+=
+2\pi\sigma R-\pi\Delta fR^2.
+\]
+
+The critical radius is
+\[
+R_c=\frac{\sigma}{\Delta f}.
+\]
+
+Thus
+\[
+\boxed{
+\text{boundary cost}\sim R,
+\qquad
+\text{interior reward}\sim R^2.
+}
+\]
+
+\section{Relation to \(O(n)\) loop gases}
+
+A standard loop model has partition function
+\[
+Z_{\rm loop}
+=
+\sum_{\Gamma}
+x^{|\Gamma|}
+n^{N_{\rm loop}(\Gamma)}.
+\]
+
+Our barrier model suggests introducing
+\[
+y^{\mathcal E(s)}
+=
+y^{\beta_1(B_s)-1}.
+\]
+
+An analytically useful deformation is
+\[
+Z_{\alpha,y}
+=
+\sum_s
+e^{-\beta H_0[s]}
+\prod_cD_c[s]^\alpha
+y^{\beta_1(B_s)-1}.
+\]
+
+The important experiment is to start with \(y=1\), so enclosure has no explicit energetic reward. If the system nevertheless develops macroscopic \(\beta_1\) structure, it is genuinely emergent.
+
+\section{Relation to the six-vertex model}
+
+The six-vertex or ice model places arrows on lattice edges and imposes the purely local rule
+\[
+2\text{ arrows in},
+\qquad
+2\text{ arrows out}
+\]
+at every vertex.
+
+A local divergence-free constraint generates conserved fluxes, loop structures, and height fields.
+
+Conceptually,
+\[
+\nabla\cdot E=0
+\]
+locally forces extended global structure.
+
+This is close in spirit to the present construction, except that our fundamental constraint is the existence of a rooted path from every stone to a liberty.
+
+\section{Cohomology versus topological order}
+
+Suppose a binary site field \(u\in C^0(X;\mathbb Z_2)\) describes two phases.
+
+Its domain-wall field is roughly
+\[
+a=du\in C^1(X;\mathbb Z_2).
+\]
+
+Automatically,
+\[
+da=d^2u=0.
+\]
+
+So the wall field is a cocycle, but it is exact:
+\[
+[a]=0\in H^1(X;\mathbb Z_2).
+\]
+
+Thus merely obtaining closed loops does not imply a nontrivial cohomology sector.
+
+If we want genuine gauge-like topological sectors, the edge variable must instead be promoted to an independent field
+\[
+a\in C^1(X;\mathbb Z_2)
+\]
+subject only to
+\[
+da=0,
+\]
+without requiring \(a=du\).
+
+On
+\[
+X=T^2,
+\]
+we have
+\[
+H^1(T^2;\mathbb Z_2)
+=
+\mathbb Z_2\oplus\mathbb Z_2.
+\]
+
+The two bits record winding around the two noncontractible cycles.
+
+Hence
+\[
+\boxed{
+\begin{array}{c}
+\text{closed territorial loops}\\
+\neq\\
+\text{nontrivial cohomology sector}\\
+\neq\\
+\text{topological order}.
+\end{array}
+}
+\]
+
+\section{Mean-field solution of the unconstrained spin sector}
+
+Define
+\[
+m=\langle s_i\rangle,
+\qquad
+q=\langle s_i^2\rangle.
+\]
+
+For coordination number \(z=4\), mean-field decoupling gives the single-site effective energy
+\[
+\epsilon(s)
+=
+-(zJm+h)s
++
+(\Delta-zKq)s^2.
+\]
+
+Define
+\[
+u=\beta(zJm+h)
+\]
+and
+\[
+a=e^{-\beta(\Delta-zKq)}.
+\]
+
+The one-site partition function is
+\[
+Z_1
+=
+1+2a\cosh u.
+\]
+
+Therefore
+\[
+\boxed{
+m
+=
+\frac{2a\sinh u}
+{1+2a\cosh u}
+}
+\]
+and
+\[
+\boxed{
+q
+=
+\frac{2a\cosh u}
+{1+2a\cosh u}.
+}
+\]
+
+The mean-field free energy is
+\[
+\boxed{
+f(m,q)
+=
+\frac{zJ}{2}m^2
++
+\frac{zK}{2}q^2
+-
+\frac1\beta
+\log\!\left[
+1+
+2e^{-\beta(\Delta-zKq)}
+\cosh\!\big(\beta(zJm+h)\big)
+\right].
+}
+\]
+
+At \(h=0\), linearizing near \(m=0\) gives
+\[
+m
+\simeq
+\beta zJ q\,m,
+\]
+so the mean-field instability occurs when
+\[
+\boxed{
+1=\beta zJq.
+}
+\]
+
+\section{What the forest constraint changes}
+
+Write the full effective free energy as
+\[
+H_{\rm eff}
+=
+H_0
+-
+\frac{\alpha}{\beta}
+\sum_c\log\det M_c.
+\]
+
+In eigenvalues,
+\[
+\log\det M_c
+=
+\sum_a\log\lambda_a^{(c)}.
+\]
+
+This suggests defining a liberty gap
+\[
+\boxed{
+\Delta_{\rm lib}(C)
+=
+\lambda_{\min}(L_C+R_C).
+}
+\]
+
+A well-rooted compact group should have a relatively large liberty gap. A group connected to its only liberty through a long narrow corridor will tend to have a much smaller gap. A dead group has
+\[
+\Delta_{\rm lib}=0.
+\]
+
+\section{The proposed phase diagram}
+
+The natural control parameters are
+\[
+\beta J,\qquad
+\beta K,\qquad
+\beta\Delta,\qquad
+\alpha.
+\]
+
+Measure
+\[
+m,\quad
+q,\quad
+\beta_0(E_s),\quad
+\beta_1(B_s),\quad
+A_{\max}^{\rm owned},\quad
+\Delta_{\rm lib}.
+\]
+
+Use as a primary territorial order parameter
+\[
+\boxed{
+\rho_{\rm terr}
+=
+\frac{1}{L^2}
+\mathbb E
+\left[
+\max_{D:\,o(D)\neq0}|D|
+\right].
+}
+\]
+
+A genuine macroscopic territorial phase would have
+\[
+\lim_{L\rightarrow\infty}\rho_{\rm terr}>0.
+\]
+
+Define a topological susceptibility
+\[
+\chi_{\rm top}
+=
+\frac{1}{L^2}
+\left(
+\langle\mathcal E^2\rangle
+-
+\langle\mathcal E\rangle^2
+\right).
+\]
+
+\section{The key experiment: does topology arise without rewarding it?}
+
+The trivial model is
+\[
+H=H_{\rm local}-gA_{\rm territory}.
+\]
+
+If \(g>0\), the system is explicitly rewarded for territory.
+
+The interesting model is
+\[
+\boxed{
+H
+=
+H_0
+-
+\frac{\alpha}{\beta}
+\sum_c\log\det M_c,
+}
+\]
+with no explicit area or topology term.
+
+If macroscopic enclosure appears spontaneously, then
+\[
+\boxed{
+\text{local energetic interactions}
++
+\text{local-certifiable survival constraint}
+\rightarrow
+\text{emergent topology of the complement}.
+}
+\]
+
+\section{Go is fundamentally dynamical}
+
+A Go move is a map
+\[
+s_t\rightarrow s_{t+1}.
+\]
+
+Suppose color \(c_t\) plays at empty site \(x\).
+
+First perform placement,
+\[
+s_x\leftarrow c_t.
+\]
+
+Then inspect adjacent opponent groups. Any opponent group \(C\) satisfying
+\[
+L(C)=0
+\]
+is removed:
+\[
+s_i\leftarrow0,
+\qquad i\in C.
+\]
+
+After opponent captures are removed, inspect the newly placed player's own group. If it has no liberty, reject the move under ordinary no-suicide rules.
+
+Finally impose ko or superko.
+
+Schematically,
+\[
+\boxed{
+\mathcal T_{c,x}
+=
+\mathcal P_{\rm ko}
+\,
+\mathcal P_{\rm suicide}
+\,
+\mathcal C_{\rm capture}
+\,
+\mathcal P_{c,x}.
+}
+\]
+
+\section{A driven physical model inspired by Go}
+
+Define a stochastic lattice process.
+
+Black and White alternately attempt depositions. At an empty site \(x\), color \(c\) attempts
+\[
+0\rightarrow c
+\]
+with rate
+\[
+r_c(x|s)
+=
+r_0
+\min\left[
+1,
+e^{-\beta\Delta H_0}
+\right].
+\]
+
+After deposition, zero-liberty enemy clusters are removed. A self-killing move is rejected.
+
+Its generator can be written schematically as
+\[
+(\mathcal L f)(s)
+=
+\sum_{c,x}
+r_c(x|s)
+\left[
+f(\mathcal T_{c,x}s)-f(s)
+\right].
+\]
+
+Because capture performs irreversible many-site changes, detailed balance generally fails.
+
+\section{Capture avalanches}
+
+Let
+\[
+S_{\rm cap}
+\]
+be the number of stones removed in one capture event.
+
+Measure
+\[
+P(S_{\rm cap}).
+\]
+
+Near a dynamical critical regime, one might find
+\[
+P(S_{\rm cap})
+\sim
+S_{\rm cap}^{-\tau}
+f(S_{\rm cap}/S_c).
+\]
+
+Also measure
+\[
+\Delta\beta_1
+=
+\beta_1(B_{t+1})
+-
+\beta_1(B_t),
+\]
+and the joint distribution
+\[
+P(S_{\rm cap},\Delta\beta_1).
+\]
+
+\section{Time-dependent topology and zigzag persistence}
+
+Ordinary persistent homology assumes
+\[
+X_0\subseteq X_1\subseteq X_2\subseteq\cdots.
+\]
+
+Go does not.
+
+One can instead form
+\[
+K_t
+\hookrightarrow
+K_t\cup K_{t+1}
+\hookleftarrow
+K_{t+1},
+\]
+giving
+\[
+K_0
+\rightarrow
+K_0\cup K_1
+\leftarrow
+K_1
+\rightarrow
+K_1\cup K_2
+\leftarrow
+K_2
+\rightarrow\cdots.
+\]
+
+Applying \(H^1\) gives a zigzag persistence module. Alternatively apply \(H^0\) to empty-space graphs.
+
+The resulting barcode records the lifetimes of enclosed regions.
+
+Define, for example,
+\[
+P_{\rm top}(s_{0:T})
+=
+\sum_a
+\ell_a^p,
+\]
+where \(\ell_a\) is the lifetime of the \(a\)-th enclosure class.
+
+\section{A definition of settled territory}
+
+Call a chamber class \(\tau\)-persistent if its zigzag interval survives for at least \(\tau\) future moves.
+
+Define
+\[
+A_{\rm stable}(t,\tau)
+=
+\sum_{\alpha:\ell_\alpha\geq\tau}
+A(\alpha).
+\]
+
+Then
+\[
+\frac{A_{\rm stable}(t,\tau)}{L^2}
+\]
+is a quantitative measure of how much of the board has become topologically settled.
+
+\section{The strategic model}
+
+Actual Go introduces adversarial optimization.
+
+Let a terminal score be
+\[
+S[s]
+=
+A_B[s]-A_W[s]
++
+N_B[s]-N_W[s]
+-\text{komi},
+\]
+with the precise form adjusted for scoring convention.
+
+A perfect zero-sum value function satisfies
+\[
+V_c(s)
+=
+\max_{x\in\mathcal L_c(s)}
+\left[
+-V_{-c}(\mathcal T_{c,x}s)
+\right],
+\]
+with
+\[
+V(s_{\rm terminal})=S[s_{\rm terminal}].
+\]
+
+Compare three ensembles:
+\[
+\text{equilibrium},
+\qquad
+\text{driven stochastic},
+\qquad
+\text{adversarial strategic}.
+\]
+
+If only strategic dynamics develops macroscopic enclosure, then
+\[
+\boxed{
+\text{topological organization is strategy-induced rather than equilibrium-induced}.
+}
+\]
+
+\section{Relation to random-cluster and forest physics}
+
+The Fortuin--Kasteleyn random-cluster model unifies percolation, Ising, and Potts physics.
+
+The arboreal gas appears in an appropriate
+\[
+q\rightarrow0
+\]
+limit, where graph configurations become forests.
+
+The present construction naturally couples a spin-1 occupancy/color sector to a rooted-forest sector:
+\[
+\boxed{
+\text{BEG spin-1 model}
+\quad\text{coupled to}\quad
+\text{rooted forest / }q\rightarrow0\text{ sector}.
+}
+\]
+
+\section{Model correspondence table}
+
+\begin{center}
+\begin{tabular}{p{0.28\textwidth}p{0.31\textwidth}p{0.31\textwidth}}
+\toprule
+Our ingredient & Established analogue & Shared structure\\
+\midrule
+\(s_i=-1,0,+1\) & Blume--Emery--Griffiths / Blume--Capel & two species plus vacancy\\
+Friendly/enemy interfaces & Ising/Potts & local domain energetics\\
+Closed boundaries & Peierls contours & local interactions become loops\\
+Loop fugacity & \(O(n)\) model & weight per extended loop\\
+Local conservation constraint & six-vertex / ice & local rule produces global flux structure\\
+Liberty condition & rooted spanning forests & every component connects to a permitted root\\
+\(\det(L+R)\) & matrix-forest theorem & determinant counts rooted forests\\
+Forest continuum sector & \(q\to0\) Potts / arboreal gas & fermionic and supersymmetric formulations\\
+Capture dynamics & bootstrap/KCM-like culling & local constraints generate complex dynamics\\
+Territory chambers & complement \(H^0\) & connected regions are topological classes\\
+Enclosing barriers & \(H^1\) via Alexander duality & loops dual to complement components\\
+Time-dependent territory & zigzag persistence & topology under additions and deletions\\
+Torus extension & lattice gauge theory & nontrivial cohomology/winding sectors\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{How to solve the model numerically}
+
+For each proposed configuration \(s\), construct the connected same-color graphs \(G_+\) and \(G_-\).
+
+Union-find gives their components essentially in linear time.
+
+The empty graph similarly yields the chamber decomposition.
+
+The root matrices are obtained from
+\[
+r_i=\lambda\ell_i.
+\]
+
+For a \(19\times19\) board, the matrices have at most 361 vertices, so direct sparse factorizations are feasible.
+
+Compute
+\[
+\log D_c
+=
+\log\det(L_c+R_c)
+\]
+using sparse Cholesky decomposition whenever \(M_c\) is positive definite.
+
+The spin sector can be sampled with local Metropolis updates, cluster-inspired moves, or joint spin/forest updates.
+
+\section{Finite-size scaling}
+
+For
+\[
+L=16,24,32,48,64,\ldots,
+\]
+measure
+\[
+m,\quad
+q,\quad
+\rho_{\rm terr},\quad
+\mathcal E,\quad
+\chi_{\rm top},\quad
+\Delta_{\rm lib},
+\]
+and loop/chamber size distributions.
+
+Near a continuous transition one expects
+\[
+\rho_{\rm terr}(L,t)
+=
+L^{-\beta_T/\nu}
+F(tL^{1/\nu}),
+\]
+where
+\[
+t=\frac{g-g_c}{g_c}.
+\]
+
+Similarly,
+\[
+\chi_{\rm top}
+\sim
+L^{\gamma_T/\nu}.
+\]
+
+At a candidate conformal critical point, transfer-matrix calculations on long strips could extract an effective central charge from
+\[
+f_L
+=
+f_\infty
+-\frac{\pi c_{\rm eff}}{6L^2}
++\cdots.
+\]
+
+\section{A clean analytically tractable hierarchy}
+
+The zeroth model is ordinary Ising.
+
+The next model is the BEG lattice gas without forest constraints.
+
+Then switch on a weak forest exponent,
+\[
+0<\alpha\ll1.
+\]
+
+Formally,
+\[
+D^\alpha
+=
+e^{\alpha\log D}
+=
+1+\alpha\log D+O(\alpha^2).
+\]
+
+Therefore
+\[
+H_{\rm eff}
+=
+H_0
+-\frac{\alpha}{\beta}\log D_+
+-\frac{\alpha}{\beta}\log D_-
++O(\alpha^2).
+\]
+
+At
+\[
+\alpha=1,
+\]
+the auxiliary fermion/forest representation becomes especially natural.
+
+\section{A possible continuum effective theory}
+
+Introduce coarse-grained fields
+\[
+\rho(x)
+\]
+for occupation density and
+\[
+\phi(x)
+\]
+for color polarization.
+
+A standard Landau functional is
+\[
+S_{\rm BEG}
+=
+\int d^2x\,
+\left[
+\frac{\kappa_\phi}{2}(\nabla\phi)^2
++
+\frac{\kappa_\rho}{2}(\nabla\rho)^2
++
+V(\phi,\rho)
+\right].
+\]
+
+The forest fields introduce Grassmann variables
+\[
+\psi_\pm,\bar\psi_\pm.
+\]
+
+Schematically,
+\[
+S_{\rm forest}
+=
+\int d^2x\,
+\bar\psi_+
+\mathcal M_+[\phi,\rho]
+\psi_+
++
+\bar\psi_-
+\mathcal M_-[\phi,\rho]
+\psi_-.
+\]
+
+A minimal operator might have the form
+\[
+\mathcal M_\pm
+=
+-\nabla\cdot
+D_\pm(\phi,\rho)
+\nabla
++
+\mu_\pm(\phi,\rho,\nabla\rho).
+\]
+
+After integrating out the fermions,
+\[
+S_{\rm eff}
+=
+S_{\rm BEG}
+-
+\alpha\log\det\mathcal M_+
+-
+\alpha\log\det\mathcal M_-.
+\]
+
+\section{What could actually be proved}
+
+Several pieces are theorem-level statements:
+
+\begin{enumerate}
+\item The liberty-determinant theorem:
+\[
+\det(L_c+R_c)>0
+\]
+if and only if each color-\(c\) component possesses a liberty.
+
+\item The rooted-forest interpretation of that determinant via the matrix-forest theorem.
+
+\item The planar duality statement relating complement components to \(H^1\) of the barrier through Alexander duality.
+
+\item The exact Peierls contour representation of the Ising benchmark.
+\end{enumerate}
+
+The central open statements concern the coupled model.
+
+\begin{conjecture}[Enclosure Transition]
+There exists a region of parameter space of the Go--spanning-forest model in which a thermodynamic transition separates a phase with only microscopic owned chambers from a phase in which
+\[
+\lim_{L\to\infty}
+\frac{\mathbb E[A_{\max}^{\rm owned}]}{L^2}>0.
+\]
+\end{conjecture}
+
+\begin{conjecture}[Driven Enclosure]
+Alternating deposition-and-capture dynamics generates a nonequilibrium regime with macroscopic persistent complement classes despite the absence of an explicit topological energy term.
+\end{conjecture}
+
+\begin{conjecture}[Strategy-Induced Topology]
+Adversarial optimization produces a substantially different distribution of persistent \(H^1\) classes from both equilibrium and unbiased driven dynamics.
+\end{conjecture}
+
+\section{Why the forest connection may be the deepest part}
+
+There is a conceptual triangle:
+\[
+\boxed{
+\begin{array}{ccc}
+\text{connectivity} &\longleftrightarrow& \text{graph Laplacian}\\
+\updownarrow && \updownarrow\\
+\text{survival to liberty} &\longleftrightarrow& \det(L+R)\\
+\updownarrow && \updownarrow\\
+\text{rooted forest} &\longleftrightarrow& \text{fermionic field theory}.
+\end{array}
+}
+\]
+
+The Laplacian controls diffusion, random walks, electrical networks, spectral geometry, Gaussian fields, spanning trees, and many continuum field theories.
+
+Liberties become absorbing roots.
+
+A Go group becomes a domain in which a random walker must eventually be able to reach an absorbing boundary.
+
+A dead group is precisely a component with no absorbing root and hence a Laplacian zero mode.
+
+Thus
+\[
+\boxed{
+\text{A living group is a domain with a sink.}
+}
+\]
+
+Capture corresponds to the spectral singularity
+\[
+\lambda_{\min}\to0,
+\qquad
+\det M\to0.
+\]
+
+\section{A probabilistic interpretation}
+
+Because \(M=L+R\) is a killed graph Laplacian, consider a random walk moving among stones of one group.
+
+Whenever it reaches a root site, it can escape through a liberty.
+
+The Green function
+\[
+G=(L+R)^{-1}
+\]
+measures propagation before killing.
+
+As the group approaches death,
+\[
+\lambda_{\min}\to0,
+\]
+so \(G\) develops a large mode.
+
+This suggests vulnerability measures such as
+\[
+\boxed{
+\mathcal V(C)
+=
+\operatorname{Tr}(L_C+R_C)^{-1}
+}
+\]
+or
+\[
+\mathcal V_\infty(C)
+=
+\frac1{\lambda_{\min}}.
+\]
+
+\section{Where sheaf cohomology might enter}
+
+Ordinary cellular cohomology is sufficient for enclosure.
+
+A sheaf formulation becomes meaningful only if each local patch \(U\) carries a space
+\[
+\mathcal F(U)
+\]
+of locally consistent tactical claims, with restriction maps
+\[
+\rho_{UV}:\mathcal F(U)\to\mathcal F(V).
+\]
+
+A global consistent interpretation is a section
+\[
+s\in H^0(X;\mathcal F),
+\]
+while a nontrivial
+\[
+H^1(X;\mathcal F)
+\]
+would represent an obstruction to gluing locally consistent tactical assessments into a globally consistent one.
+
+Without a precise local data structure and restriction map, sheaf language should not be introduced.
+
+\section{A toroidal extension}
+
+Put the model on
+\[
+T^2.
+\]
+
+Introduce an independent closed edge field
+\[
+a\in Z^1(T^2;\mathbb Z_2).
+\]
+
+Its cohomology class is
+\[
+[a]=(w_x,w_y)
+\in
+H^1(T^2;\mathbb Z_2)
+\simeq
+\mathbb Z_2^2.
+\]
+
+Define Wilson-type observables
+\[
+W_x=(-1)^{w_x},
+\qquad
+W_y=(-1)^{w_y}.
+\]
+
+Then study sector-dependent free energies
+\[
+F_{w_x,w_y}(L).
+\]
+
+This is the appropriate path toward genuine gauge/topological physics.
+
+\section{A realistic first-paper program}
+
+Define
+\[
+\boxed{
+Z_\alpha(J,K,\Delta)
+=
+\sum_s
+e^{-\beta H_{\rm BEG}[s]}
+\prod_{c=\pm}
+\det\!\left(
+L_c[s]+\lambda R_c[s]
+\right)^\alpha.
+}
+\]
+
+Then:
+
+\begin{enumerate}
+\item Prove the determinant/liberty theorem.
+\item Derive the rooted-forest representation.
+\item Develop mean-field theory for the BEG sector.
+\item Simulate the full model.
+\item Measure conventional and topological observables.
+\item Determine whether the forest constraint shifts known transition lines or creates qualitatively new phases.
+\item Search for a regime with
+\[
+m=0
+\]
+but
+\[
+\rho_{\rm terr}>0.
+\]
+\item If a continuous transition is found, perform finite-size scaling and compare against Ising, percolation, Potts, and loop-model universality classes.
+\end{enumerate}
+
+\section{The second paper}
+
+Replace equilibrium updates with Go-like deposition/capture dynamics:
+\[
+s_{t+1}
+=
+\mathcal T_{c_t,x_t}s_t.
+\]
+
+Study
+\[
+P(S_{\rm cap}),
+\quad
+P(\Delta\beta_1),
+\quad
+\text{activity},
+\quad
+\text{relaxation time},
+\quad
+\text{persistent territory}.
+\]
+
+Compare this driven ensemble to an equilibrium ensemble having similar one-point densities.
+
+\section{The third paper}
+
+Use actual game records.
+
+For every move \(t\), construct
+\[
+E_t,\qquad
+B_t,\qquad
+L_\pm(t)+R_\pm(t).
+\]
+
+Measure
+\[
+\beta_0(E_t),
+\qquad
+\beta_1(B_t),
+\qquad
+\lambda_{\min}^{\pm}(t),
+\]
+and zigzag persistence intervals.
+
+Compare professional games, strong AI, weak AI, and random legal play.
+
+\section{Conceptual endpoint}
+
+The project develops through the chain
+\[
+\begin{aligned}
+\text{site variables}
+&\longrightarrow
+\text{same-color graph}\\
+&\longrightarrow
+\text{graph Laplacian}\\
+&\longrightarrow
+\text{rooted forest}\\
+&\longrightarrow
+\text{liberty constraint}\\
+&\longrightarrow
+\text{surviving extended barriers}\\
+&\longrightarrow
+H^1(B)\\
+&\overset{\rm Alexander}{\longleftrightarrow}
+H^0(X-B)\\
+&\longrightarrow
+\text{enclosed chambers}\\
+&\longrightarrow
+\text{territorial area}.
+\end{aligned}
+\]
+
+The dynamics adds
+\[
+\text{capture}
+\longrightarrow
+\text{birth/death of topological classes}
+\longrightarrow
+\text{zigzag persistence}.
+\]
+
+The field theory adds
+\[
+\det(L+R)
+\longrightarrow
+\text{Grassmann variables}
+\longrightarrow
+\text{forest/supersymmetric sector}.
+\]
+
+The gauge extension adds
+\[
+da=0,
+\qquad
+[a]\in H^1(T^2;\mathbb Z_2).
+\]
+
+Thus a better summary than ``Go is an Ising model'' is
+\[
+\boxed{
+\text{Go-like physics}
+=
+\text{spin-1 lattice gas}
++
+\text{rooted-forest constraints}
++
+\text{loop/complement topology}
++
+\text{nonequilibrium adversarial dynamics}.
+}
+\]
+
+The central mathematical object is
+\[
+\boxed{
+Z_\alpha
+=
+\sum_{\{s_i=-1,0,+1\}}
+e^{-\beta H_{\rm BEG}[s]}
+\prod_{c=\pm}
+\det(L_c[s]+R_c[s])^\alpha.
+}
+\]
+
+The clean research question is therefore
+\[
+\boxed{
+\textbf{
+Can a locally interacting, locally certifiable lattice system undergo a transition in the topology of its complement?
+}
+}
+\]
+
+Go is the motivating system that tells us which local constraint to study.
+
+\end{document}
