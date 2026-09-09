@@ -64,22 +64,42 @@ docs/        the interactive bot (GitHub Pages)
 
 ## The bot
 
-`docs/` is a self-contained page with no dependencies. The engine has **no tree search,
-no network and no opening book**. It scores each legal move by
+`docs/` is a self-contained page with no dependencies. No neural network, no opening
+book, and nothing in the evaluation that wasn't derived from the model.
 
-```
-ΔH_eff  =  ΔH_BEG  −  (α/β) Σ_c log det(L_c + R_c)  −  w·Δterritory  −  w·captures
-```
+The first version scored moves by the change in `H_eff` — which is the right object for
+the equilibrium model and the wrong one for choosing a move. **`log det` is extensive.**
+Every stone adds about `log 4`, so `−α log det` acts as a chemical potential for more
+stones and swamps every other term. The bot condensed instead of playing: it filled the
+board with one solid mass and captured 52 stones in a 9×9 game.
 
-and Boltzmann-samples from it. It is not strong — a competent club player will take it
-apart. That is the point: every term on the plots is a term it is actually playing by,
-so moving a slider visibly changes its style. Turn `K` up and it clumps. Turn `α` up and
-it starts fighting for liberties instead of territory. Set the temperature to zero and it
-plays the single lowest-energy move every time, which is a surprisingly rigid opponent.
+What it uses instead are the same quantities read *intensively*:
 
-Live panels: liberty gap per group, `log det(L+R)` per colour over the game, β₀ of empty
-space, the enclosure count ℰ, and territory. Board overlays show chamber decomposition,
-ownership, and liberty gap as heat.
+| term | what it is |
+|---|---|
+| liberties `ℓ_i` | the diagonal of `R` in `M = L + R`, counted rather than diagonalised |
+| atari | a group one move from its liberty gap collapsing |
+| capturing race | whether a short-of-breath group beats the enemy group beside it |
+| eye protection | never fill your own single-point eye — that destroys an H⁰ class of your own complement |
+| territory | owned chambers, the functional `T[s]` |
+| one ply of reply | a stone that dies next move otherwise scores perfectly well |
+
+That last one mattered most. Without it the bot fed stones to its opponent all game;
+with it, self-play settles into games like 30–29 with 8 captures.
+
+`α` is wired to exactly the terms it names — the liberty-entropy weight scales how hard
+the bot fights for breath. At `α = 0.1` it plays carelessly and loses about 54 stones a
+game; at `α = 3.0` that drops to 18. The other sliders move it similarly.
+
+It is still weak. A club player will take it apart, it has no concept of life and death
+beyond the one-move horizon, and it does not know when a position is settled well enough
+to leave alone. What it is instead is *legible*: every curve beside the board is computed
+from the position it is playing, and the sliders are coefficients in its scoring rather
+than opaque weights.
+
+Live panels: liberty gap per group, `log det(L+R)` per colour, β₀ of empty space, the
+enclosure count ℰ, and territory. Board overlays show chambers, ownership, and liberty
+gap as heat. Roughly 13 ms per move on 9×9 and 35 ms on 19×19.
 
 ## Running the Python side
 

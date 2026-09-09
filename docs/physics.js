@@ -291,77 +291,256 @@ function hEff(board, p) {
 
 /* --------------------------------------------------------------- engine -- */
 
-/** Score one move. Lower is better. Same terms the plots display. */
+/* Tactical layer, read straight off the root weights.
+ *
+ * l_i -- the number of empty points next to stone i -- is exactly the diagonal
+ * of R in M = L + R, and a group in atari is one whose liberty gap is about to
+ * collapse. So these are not heuristics bolted onto the physics; they are the
+ * same quantities, evaluated by counting instead of by diagonalising. Counting
+ * is what makes the bot fast enough to search a useful number of candidates,
+ * and the eigenvalue is kept for the plots and for the strategic terms.
+ */
+
+/** Total size of this colour's groups that are down to one liberty. */
+function atariWeight(board, colour) {
+  let w = 0;
+  for (const g of board.groups(colour)) {
+    if (g.libs.length === 1) w += Math.min(g.stones.length, 8);
+  }
+  return w;
+}
+
+/** Sum of liberties over this colour's groups: the colour's total breathing room. */
+function totalLiberties(board, colour) {
+  let t = 0;
+  for (const g of board.groups(colour)) t += g.libs.length;
+  return t;
+}
+
+/** True if `i` is a single-point eye of `colour`. Filling one destroys an H^0
+ *  class of your own complement and is never worth a stone. */
+function isOwnEye(board, i, colour) {
+  if (board.s[i] !== EMPTY) return false;
+  for (const j of board.nbrs(i)) if (board.s[j] !== colour) return false;
+  const n = board.n, r = (i / n) | 0, c = i % n;
+  let enemyDiag = 0, diagCount = 0;
+  for (const [dr, dc] of [[-1,-1],[-1,1],[1,-1],[1,1]]) {
+    const rr = r + dr, cc = c + dc;
+    if (rr < 0 || cc < 0 || rr >= n || cc >= n) continue;
+    diagCount++;
+    if (board.s[rr * n + cc] === -colour) enemyDiag++;
+  }
+  return enemyDiag <= (diagCount < 4 ? 0 : 1);
+}
+
+/** Distance from the board edge, in lines (0 = on the edge). */
+function lineOf(board, i) {
+  const n = board.n, r = (i / n) | 0, c = i % n;
+  return Math.min(r, c, n - 1 - r, n - 1 - c);
+}
+
+/** Score one move. Lower is better. */
 function moveScore(board, i, colour, p, wTerr, wCap) {
-  const before = h0(board, p);
-  const beforeTerr = topologySummary(board);
-  const beforeOwn = colour === BLACK ? beforeTerr.territoryBlack : beforeTerr.territoryWhite;
+  if (isOwnEye(board, i, colour)) return Infinity;
+
+  const beforeOwnAtari = atariWeight(board, colour);
+  const beforeOppAtari = atariWeight(board, -colour);
+  const beforeOwnLibs = totalLiberties(board, colour);
+  const beforeOppLibs = totalLiberties(board, -colour);
 
   const t = board.clone();
   const captured = t.play(i, colour);
 
-  const ldOwn = logDetColour(t, colour, p.lam);
-  if (ldOwn === null) return Infinity;             // walks into its own death
+  const own = t.group(i);
+  const ownLibs = own.libs.length;
+  if (ownLibs === 0) return Infinity;
 
-  let score = h0(t, p) - before;
-  score += -(p.alpha / p.beta) * ldOwn;
+  let score = 0;
 
-  const ldOpp = logDetColour(t, -colour, p.lam);
-  if (ldOpp !== null) score += (p.alpha / p.beta) * ldOpp * 0.5;  // squeeze them
+  /* -- captures ------------------------------------------------------- */
+  score -= wCap * 3.0 * captured.length;
 
-  const afterTerr = topologySummary(t);
-  const afterOwn = colour === BLACK ? afterTerr.territoryBlack : afterTerr.territoryWhite;
-  score -= wTerr * (afterOwn - beforeOwn);
-  score -= wCap * captured.length;
+  /* -- never hand over a group ---------------------------------------- */
+  // self-atari: after this move our own group sits on one liberty
+  if (ownLibs === 1 && captured.length === 0) {
+    score += 12 + 3 * Math.min(own.stones.length, 8);
+  }
+
+  // capturing race: a short-of-breath group that touches a better-off enemy
+  // group loses the race, and the bot has no lookahead to discover that later
+  if (ownLibs <= 3 && captured.length === 0) {
+    let losingRace = own.stones.length > 0;
+    let touchesEnemy = false;
+    for (const st of own.stones) {
+      for (const j of t.nbrs(st)) {
+        if (t.s[j] === -colour) {
+          touchesEnemy = true;
+          if (t.group(j).libs.length <= ownLibs) losingRace = false;  // we win or tie
+        }
+      }
+    }
+    if (touchesEnemy && losingRace) {
+      score += p.alpha * 5.5 / ownLibs;             // 5.5, 2.75, 1.8 for 1,2,3
+    }
+    // being short of breath is bad regardless of who is nearby
+    score += p.alpha * 1.6 / (ownLibs * ownLibs);
+  }
+
+  /* -- rescue and pressure ---------------------------------------------
+   * alpha is the liberty-entropy weight of the model, and it scales exactly
+   * the terms that care about liberties: how hard the bot fights to keep its
+   * own groups breathing and to take the opponent's breath away. Turn it down
+   * and it stops fighting and just takes territory; turn it up and it will
+   * chase a capture across the board at the cost of shape. */
+  const a = p.alpha;
+  // our stones freed from atari (negative delta is good)
+  score += 4.0 * a * (atariWeight(t, colour) - beforeOwnAtari);
+  // enemy stones pushed into atari (positive delta is good, so subtract)
+  score -= 2.6 * a * (atariWeight(t, -colour) - beforeOppAtari);
+
+  /* -- breathing room -------------------------------------------------- */
+  score -= 0.30 * a * (totalLiberties(t, colour) - beforeOwnLibs);
+  score += 0.22 * a * (totalLiberties(t, -colour) - beforeOppLibs);
+
+  /* -- efficiency: solid clumps are strong and slow --------------------- */
+  let ownAdj = 0, oppAdj = 0;
+  for (const j of board.nbrs(i)) {
+    if (board.s[j] === colour) ownAdj++;
+    else if (board.s[j] === -colour) oppAdj++;
+  }
+  if (ownAdj >= 2) score += 0.85 * (ownAdj - 1);      // filling your own shape
+  score += 0.25 * p.K * ownAdj;                       // K still tunes clustering
+  score -= 0.20 * p.J * oppAdj;                       // J still tunes contact
+
+  /* -- where on the board ---------------------------------------------- */
+  const line = lineOf(board, i);
+  const stones = board.s.reduce((a, v) => a + (v !== EMPTY ? 1 : 0), 0);
+  if (stones < board.n * board.n * 0.25) {
+    if (line === 0) score += 2.2;                     // first line, too early
+    else if (line === 1) score += 0.9;
+    else if (line === 2 || line === 3) score -= 0.55; // third and fourth lines
+  }
+
+  /* -- proximity: play near the action ---------------------------------- */
+  if (stones > 0) {
+    let best = 99;
+    const n = board.n, r = (i / n) | 0, c = i % n;
+    for (let k = 0; k < board.s.length; k++) {
+      if (board.s[k] === EMPTY) continue;
+      const d = Math.abs(r - ((k / n) | 0)) + Math.abs(c - (k % n));
+      if (d < best) best = d;
+    }
+    if (best > 3) score += 0.55 * (best - 3);
+  }
+
+  /* -- territory: the one strategic term worth its cost ------------------ */
+  if (wTerr > 0) {
+    const bt = topologySummary(board);
+    const at = topologySummary(t);
+    const before = colour === BLACK ? bt.territoryBlack : bt.territoryWhite;
+    const after = colour === BLACK ? at.territoryBlack : at.territoryWhite;
+    score -= wTerr * 0.35 * (after - before);
+  }
+
   return score;
 }
 
-/** Boltzmann-sample a move from the physics score. Returns -1 to pass. */
-function chooseMove(board, colour, p, opts = {}) {
-  const temperature = opts.temperature ?? 0.6;
-  const wTerr = opts.wTerritory ?? 1.0;
-  const wCap = opts.wCapture ?? 2.0;
-  const maxCandidates = opts.candidates ?? 60;
-
-  let legal = board.legalMoves(colour);
-  if (!legal.length) return -1;
+/** Candidate moves worth scoring: legal, near the action, not our own eye. */
+function candidateMoves(board, colour, limit) {
+  const legal = board.legalMoves(colour).filter(i => !isOwnEye(board, i, colour));
+  if (!legal.length) return [];
 
   const occupied = [];
   for (let i = 0; i < board.s.length; i++) if (board.s[i] !== EMPTY) occupied.push(i);
+  if (!occupied.length) return legal;
+  if (legal.length <= limit) return legal;
 
-  if (occupied.length && legal.length > maxCandidates) {
-    const n = board.n;
-    const dist = i => {
-      const r = (i / n) | 0, c = i % n;
-      let best = 1e9;
-      for (const o of occupied) {
-        const d = Math.abs(r - ((o / n) | 0)) + Math.abs(c - (o % n));
-        if (d < best) best = d;
-      }
-      return best;
-    };
-    legal = legal.map(i => [i, dist(i)]).sort((a, b) => a[1] - b[1])
-      .slice(0, maxCandidates).map(x => x[0]);
-  } else if (!occupied.length) {
-    // empty board: opening on a star point beats scoring 361 identical moves
-    const n = board.n, k = n >= 13 ? 3 : 2;
+  const n = board.n;
+  return legal.map(i => {
+    const r = (i / n) | 0, c = i % n;
+    let best = 99;
+    for (const o of occupied) {
+      const dd = Math.abs(r - ((o / n) | 0)) + Math.abs(c - (o % n));
+      if (dd < best) best = dd;
+    }
+    return [i, best];
+  }).sort((a, b) => a[1] - b[1]).slice(0, limit).map(x => x[0]);
+}
+
+/** Minimax to depth two.
+ *
+ * The single biggest weakness of scoring a move by the position it produces is
+ * that a stone which dies on the very next move looks fine. One ply of reply
+ * fixes exactly that, and it is what turned this from a bot that fed stones to
+ * its opponent into one that plays a recognisable game. Territory is skipped in
+ * the reply scan -- it is the expensive term and it barely moves the ranking of
+ * a refutation.
+ */
+function scoreWithReply(board, i, colour, p, wTerr, wCap, gamma, replyWidth) {
+  const own = moveScore(board, i, colour, p, wTerr, wCap);
+  if (!Number.isFinite(own)) return own;
+  if (gamma <= 0) return own;
+
+  const t = board.clone();
+  t.play(i, colour);
+
+  let bestReply = Infinity;
+  for (const j of candidateMoves(t, -colour, replyWidth)) {
+    const r = moveScore(t, j, -colour, p, 0, wCap);
+    if (r < bestReply) bestReply = r;
+  }
+  if (!Number.isFinite(bestReply)) return own;
+  return own - gamma * bestReply;
+}
+
+/** Boltzmann-sample a move. Returns -1 to pass.
+ *
+ * Two stages: rank cheaply, then spend the lookahead only on the shortlist.
+ */
+function chooseMove(board, colour, p, opts = {}) {
+  const temperature = opts.temperature ?? 0.25;
+  const wTerr = opts.wTerritory ?? 1.0;
+  const wCap = opts.wCapture ?? 2.0;
+  const width = opts.candidates ?? 60;
+  const gamma = opts.gamma ?? 0.8;
+  const shortlist = opts.shortlist ?? 12;
+  const replyWidth = opts.replyWidth ?? 12;
+
+  // opening: the energy is flat on an empty board, so take a star point
+  let anyStone = false;
+  for (let i = 0; i < board.s.length; i++) if (board.s[i] !== EMPTY) { anyStone = true; break; }
+  if (!anyStone) {
+    const n = board.n, k = n >= 13 ? 3 : 2, mid = (n - 1) >> 1;
     const stars = [];
-    for (const r of [k, (n - 1) / 2 | 0, n - 1 - k])
-      for (const c of [k, (n - 1) / 2 | 0, n - 1 - k]) stars.push(r * n + c);
+    for (const r of [k, mid, n - 1 - k]) for (const c of [k, mid, n - 1 - k]) stars.push(r * n + c);
     return stars[Math.floor(Math.random() * stars.length)];
   }
 
+  const cands = candidateMoves(board, colour, width);
+  if (!cands.length) return -1;
+
+  // stage 1: cheap ranking, no lookahead, no territory
+  const rough = [];
+  for (const i of cands) {
+    const sc = moveScore(board, i, colour, p, 0, wCap);
+    if (Number.isFinite(sc)) rough.push([i, sc]);
+  }
+  if (!rough.length) return -1;
+  rough.sort((a, b) => a[1] - b[1]);
+
+  // stage 2: full score with one ply of reply, on the shortlist only
   const scored = [];
-  for (const i of legal) {
-    const sc = moveScore(board, i, colour, p, wTerr, wCap);
+  for (const [i] of rough.slice(0, shortlist)) {
+    const sc = scoreWithReply(board, i, colour, p, wTerr, wCap, gamma, replyWidth);
     if (Number.isFinite(sc)) scored.push([i, sc]);
   }
   if (!scored.length) return -1;
 
   const best = Math.min(...scored.map(x => x[1]));
+  if (best > (opts.passThreshold ?? 2.5)) return -1;   // nothing worth a stone
   if (temperature <= 1e-9) return scored.reduce((a, b) => (b[1] < a[1] ? b : a))[0];
 
-  const weights = scored.map(([, s]) => Math.exp(-(s - best) / temperature));
+  const weights = scored.map(([, sc]) => Math.exp(-(sc - best) / temperature));
   const total = weights.reduce((a, b) => a + b, 0);
   let r = Math.random() * total, acc = 0;
   for (let k = 0; k < scored.length; k++) {

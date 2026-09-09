@@ -95,10 +95,11 @@
   <header>
     <h1>go&#8209;lattice &mdash; <span>playing Go against the physics</span></h1>
     <p class="sub">
-      This bot has no tree search, no neural network and no opening book. It scores every legal
-      move with a spin&#8209;1 lattice gas plus a rooted&#8209;forest liberty constraint, and samples
-      from the resulting Boltzmann weight. Everything plotted on the right is a term it is
-      actually playing by, so moving a slider changes how it plays.
+      No neural network, no opening book, and no evaluation function that wasn't derived from the
+      model. The bot ranks moves by liberty structure &mdash; the same root weights
+      <em>R</em> that the liberty&#8209;gap plot draws &mdash; looks one move ahead to see whether the
+      reply refutes it, and samples from a Boltzmann weight. It is weak: a club player will take it
+      apart. It is, however, transparent, and the sliders really are coefficients in its scoring.
       <a href="https://github.com/ze-bang/go-lattice">Source and the write&#8209;up</a>.
     </p>
   </header>
@@ -141,13 +142,14 @@
           <div class="slider"><label>&Delta;</label><input type="range" id="sD" min="-2" max="3" step="0.05" value="0.2"><span class="val" id="vD">0.20</span></div>
           <div class="slider"><label>&alpha;</label><input type="range" id="sA" min="0" max="4" step="0.05" value="1"><span class="val" id="vA">1.00</span></div>
           <div class="slider"><label>territory</label><input type="range" id="sT" min="0" max="4" step="0.05" value="1"><span class="val" id="vT">1.00</span></div>
-          <div class="slider"><label>temp</label><input type="range" id="sTemp" min="0" max="3" step="0.05" value="0.6"><span class="val" id="vTemp">0.60</span></div>
+          <div class="slider"><label>temp</label><input type="range" id="sTemp" min="0" max="2" step="0.05" value="0.25"><span class="val" id="vTemp">0.25</span></div>
           <p class="note">
-            <strong>J</strong> aligns colour, <strong>K</strong> clusters stones regardless of colour,
-            <strong>&Delta;</strong> is the cost of putting a stone down at all, and <strong>&alpha;</strong>
-            weights the liberty entropy &minus;log&nbsp;det(<em>L</em>&nbsp;+&nbsp;<em>R</em>).
-            At <strong>temp</strong>&nbsp;=&nbsp;0 it plays the single lowest&#8209;energy move; raise it
-            and it starts to wander.
+            <strong>J</strong> and <strong>K</strong> tune how much it wants contact and clustering,
+            <strong>&Delta;</strong> prices a stone, and <strong>territory</strong> weights owned
+            chambers against pure fighting. At <strong>temp</strong>&nbsp;=&nbsp;0 it plays its single
+            best move every time; past about 0.5 it wanders badly and starts losing groups &mdash; which
+            is itself worth seeing, since it is the same trade&#8209;off between energy and entropy that
+            the equilibrium model has.
           </p>
         </div>
       </div>

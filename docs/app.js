@@ -264,7 +264,9 @@ function botMove() {
     temperature: +el('sTemp').value,
     wTerritory: +el('sT').value,
     wCapture: 2.0,
-    candidates: state.board.n >= 19 ? 44 : 70,
+    candidates: state.board.n >= 19 ? 60 : 80,
+    shortlist: state.board.n >= 19 ? 10 : 12,
+    replyWidth: state.board.n >= 19 ? 10 : 12,
   };
   const mv = chooseMove(state.board, colour, p, opts);
   if (mv < 0) {
