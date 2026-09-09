@@ -355,7 +355,12 @@ function moveScore(board, i, colour, p, wTerr, wCap) {
   const ownLibs = own.libs.length;
   if (ownLibs === 0) return Infinity;
 
-  let score = 0;
+  /* Delta is the crystal field: the price of putting a stone on the board at
+   * all. It is the same for every candidate, so it cannot change their order --
+   * what it changes is whether the best of them is worth playing rather than
+   * passing. That is exactly its role in the model, a chemical potential for
+   * stones, and it is why raising it makes the bot stop earlier. */
+  let score = 1.4 * p.Delta;
 
   /* -- captures ------------------------------------------------------- */
   score -= wCap * 3.0 * captured.length;
@@ -484,9 +489,14 @@ function scoreWithReply(board, i, colour, p, wTerr, wCap, gamma, replyWidth) {
   const t = board.clone();
   t.play(i, colour);
 
+  // The reply is scored with no stone cost. Delta is the same constant on both
+  // sides, so leaving it in would cancel against gamma * reply and the slider
+  // would do almost nothing -- which is exactly what it did before this line.
+  const pReply = Object.assign({}, p, { Delta: 0 });
+
   let bestReply = Infinity;
   for (const j of candidateMoves(t, -colour, replyWidth)) {
-    const r = moveScore(t, j, -colour, p, 0, wCap);
+    const r = moveScore(t, j, -colour, pReply, 0, wCap);
     if (r < bestReply) bestReply = r;
   }
   if (!Number.isFinite(bestReply)) return own;

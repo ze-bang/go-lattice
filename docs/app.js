@@ -361,12 +361,47 @@ function wire() {
     });
   }
 
+  /* Keep the scoring panel showing the live coefficients, and light up the row
+   * a slider controls so it is obvious which term is being moved. */
+  const signed = x => (x >= 0 ? '+' : '\u2212') + Math.abs(x).toFixed(2);
+
+  function refreshFormula() {
+    const J = +el('sJ').value, K = +el('sK').value, D = +el('sD').value;
+    const A = +el('sA').value, T = +el('sT').value, TE = +el('sTemp').value;
+    el('fDelta').textContent = signed(1.4 * D);
+    el('fAlpha').textContent = A.toFixed(2) + ' \u00d7';
+    el('fJ').textContent = signed(-0.20 * J) + ' \u00d7';
+    el('fK').textContent = signed(0.25 * K) + ' \u00d7';
+    el('fTerr').textContent = signed(-0.35 * T) + ' \u00d7';
+    el('fTemp').textContent = TE.toFixed(2);
+  }
+
+  let litTimer = null;
+  function light(term) {
+    document.querySelectorAll('.frow.lit, .fsum.lit')
+      .forEach(n => n.classList.remove('lit'));
+    document.querySelectorAll(`[data-term="${term}"]`).forEach(n => {
+      if (n.classList.contains('frow') || n.classList.contains('fsum')) n.classList.add('lit');
+    });
+    clearTimeout(litTimer);
+    litTimer = setTimeout(() => {
+      document.querySelectorAll('.frow.lit, .fsum.lit')
+        .forEach(n => n.classList.remove('lit'));
+    }, 1400);
+  }
+
   for (const [s, v, d] of [['sJ','vJ',2],['sK','vK',2],['sD','vD',2],
                            ['sA','vA',2],['sT','vT',2],['sTemp','vTemp',2]]) {
     const upd = () => { el(v).textContent = (+el(s).value).toFixed(d); };
-    el(s).addEventListener('input', () => { upd(); if (state.overlay === 'gap') drawBoard(); });
+    el(s).addEventListener('input', () => {
+      upd();
+      refreshFormula();
+      light(el(s).dataset.term);
+      if (state.overlay === 'gap') drawBoard();
+    });
     upd();
   }
+  refreshFormula();
 
   // keep the canvas crisp on high-dpi screens
   const cv = el('board');

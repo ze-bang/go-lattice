@@ -84,6 +84,20 @@
   .legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:.25rem}
 
   .note{font-size:.76rem;color:var(--soft);margin-top:.6rem;line-height:1.5}
+
+  /* scoring formula */
+  .frow{display:grid;grid-template-columns:5.4rem 1fr;gap:.5rem;align-items:baseline;
+        padding:.42rem .5rem;border-radius:6px;font-size:.8rem;transition:background .35s}
+  .frow.lit{background:#fdf4e3}
+  .frow .coef{font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);
+              text-align:right;white-space:nowrap}
+  .frow .tname{font-weight:600;color:var(--ink)}
+  .frow .tdesc{display:block;font-size:.74rem;color:var(--soft);line-height:1.45;margin-top:.1rem}
+  .fsum{border-top:1px solid var(--line);margin-top:.5rem;padding:.6rem .5rem 0;
+        font-size:.8rem;color:var(--ink)}
+  .fsum code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.78rem;
+             background:var(--mark,#fbf3e6);padding:.1rem .3rem;border-radius:4px}
+  .fsum .tdesc{display:block;font-size:.74rem;color:var(--soft);margin-top:.3rem;line-height:1.45}
   .stack{margin-top:1rem;display:flex;flex-direction:column;gap:1rem}
   footer{margin-top:2.5rem;font-size:.8rem;color:var(--soft);text-align:center}
   footer a{color:var(--accent);text-decoration:none}
@@ -137,20 +151,82 @@
 
         <div class="card">
           <h2>Model parameters</h2>
-          <div class="slider"><label>J</label><input type="range" id="sJ" min="-1" max="3" step="0.05" value="1"><span class="val" id="vJ">1.00</span></div>
-          <div class="slider"><label>K</label><input type="range" id="sK" min="-1" max="3" step="0.05" value="0.4"><span class="val" id="vK">0.40</span></div>
-          <div class="slider"><label>&Delta;</label><input type="range" id="sD" min="-2" max="3" step="0.05" value="0.2"><span class="val" id="vD">0.20</span></div>
-          <div class="slider"><label>&alpha;</label><input type="range" id="sA" min="0" max="4" step="0.05" value="1"><span class="val" id="vA">1.00</span></div>
-          <div class="slider"><label>territory</label><input type="range" id="sT" min="0" max="4" step="0.05" value="1"><span class="val" id="vT">1.00</span></div>
-          <div class="slider"><label>temp</label><input type="range" id="sTemp" min="0" max="2" step="0.05" value="0.25"><span class="val" id="vTemp">0.25</span></div>
+          <div class="slider"><label>J</label><input type="range" data-term="shapeJ" id="sJ" min="-1" max="3" step="0.05" value="1"><span class="val" id="vJ">1.00</span></div>
+          <div class="slider"><label>K</label><input type="range" data-term="shapeK" id="sK" min="-1" max="3" step="0.05" value="0.4"><span class="val" id="vK">0.40</span></div>
+          <div class="slider"><label>&Delta;</label><input type="range" data-term="delta" id="sD" min="-2" max="3" step="0.05" value="0.2"><span class="val" id="vD">0.20</span></div>
+          <div class="slider"><label>&alpha;</label><input type="range" data-term="alpha" id="sA" min="0" max="4" step="0.05" value="1"><span class="val" id="vA">1.00</span></div>
+          <div class="slider"><label>territory</label><input type="range" data-term="terr" id="sT" min="0" max="4" step="0.05" value="1"><span class="val" id="vT">1.00</span></div>
+          <div class="slider"><label>temp</label><input type="range" data-term="temp" id="sTemp" min="0" max="2" step="0.05" value="0.25"><span class="val" id="vTemp">0.25</span></div>
           <p class="note">
-            <strong>J</strong> and <strong>K</strong> tune how much it wants contact and clustering,
-            <strong>&Delta;</strong> prices a stone, and <strong>territory</strong> weights owned
-            chambers against pure fighting. At <strong>temp</strong>&nbsp;=&nbsp;0 it plays its single
-            best move every time; past about 0.5 it wanders badly and starts losing groups &mdash; which
-            is itself worth seeing, since it is the same trade&#8209;off between energy and entropy that
-            the equilibrium model has.
+            Move a slider and the term it controls lights up in the panel below.
           </p>
+        </div>
+
+        <div class="card">
+          <h2>What the bot is scoring</h2>
+          <p class="note" style="margin-top:0;margin-bottom:.6rem">
+            Every legal move gets a score &mdash; <strong>lower is better</strong> &mdash; from these
+            terms. The sliders above <em>are</em> the coefficients.
+          </p>
+
+          <div class="frow" data-term="delta">
+            <span class="coef" id="fDelta">+0.28</span>
+            <span><span class="tname">cost of the stone</span>
+              <span class="tdesc">1.4&thinsp;&times;&thinsp;&Delta;, the same for every move, so it cannot
+              reorder them &mdash; it decides whether the best one beats passing. Raise &Delta; and the
+              bot stops playing sooner.</span></span>
+          </div>
+
+          <div class="frow" data-term="cap">
+            <span class="coef">&minus;6.0 &times;</span>
+            <span><span class="tname">captures</span>
+              <span class="tdesc">stones this move removes from the board.</span></span>
+          </div>
+
+          <div class="frow" data-term="alpha">
+            <span class="coef" id="fAlpha">1.00 &times;</span>
+            <span><span class="tname">liberty terms</span>
+              <span class="tdesc">self&#8209;atari, rescuing a group in atari, putting one <em>into</em>
+              atari, total breathing room, and whether a short&#8209;of&#8209;breath group wins the
+              capturing race. All of it is read off <em>&#8467;<sub>i</sub></em>, the diagonal of
+              <em>R</em>. &alpha; scales the lot: near 0 it plays carelessly and bleeds stones, near 3
+              it fights hard for breath.</span></span>
+          </div>
+
+          <div class="frow" data-term="shapeJ">
+            <span class="coef" id="fJ">&minus;0.20 &times;</span>
+            <span><span class="tname">contact (J)</span>
+              <span class="tdesc">how much it likes playing right next to enemy stones.</span></span>
+          </div>
+
+          <div class="frow" data-term="shapeK">
+            <span class="coef" id="fK">+0.10 &times;</span>
+            <span><span class="tname">clustering (K)</span>
+              <span class="tdesc">how much it likes its own stones touching. There is a fixed penalty
+              on top for solid clumps, which are strong but slow.</span></span>
+          </div>
+
+          <div class="frow" data-term="terr">
+            <span class="coef" id="fTerr">&minus;0.35 &times;</span>
+            <span><span class="tname">territory</span>
+              <span class="tdesc">change in owned empty area &mdash; chambers of the complement that
+              only this colour touches.</span></span>
+          </div>
+
+          <div class="fsum">
+            <code>S = (terms above) &minus; 0.8 &times; S(opponent's best reply)</code>
+            <span class="tdesc">One ply of lookahead. Without it a stone that dies on the very next
+            move scores perfectly well, which is what made an earlier version of this bot feed
+            stones to its opponent all game.</span>
+          </div>
+
+          <div class="fsum" data-term="temp">
+            <code>P(move) &prop; exp(&minus;S / <span id="fTemp">0.25</span>)</code>
+            <span class="tdesc">It samples rather than always taking the best move. At
+            <strong>temp&nbsp;=&nbsp;0</strong> it is deterministic; past about 0.5 it wanders and
+            starts losing groups &mdash; the same energy&ndash;entropy trade&#8209;off the equilibrium
+            model has.</span>
+          </div>
         </div>
       </div>
     </div>
