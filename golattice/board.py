@@ -117,6 +117,10 @@ class Board:
                                  and len(own_libs) == 1) else None
         return removed
 
+    def pass_turn(self) -> None:
+        """Consume a turn without a stone and release the simple-ko restriction."""
+        self.ko = None
+
     def legal_moves(self, colour: int) -> list[int]:
         return [i for i in range(len(self.s)) if self.is_legal(i, colour)]
 

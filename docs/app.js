@@ -13,9 +13,15 @@ const state = {
   selfPlay: false,
   useSearch: true,      // MCTS on by default; 'Score only' turns it off
   passes: 0,
+  gameOver: false,
+  komi: 0,
   series: [],           // per-move record for the plots
   lastMove: -1,
 };
+
+let searchWorker = null;
+let botTimer = null;
+let searchRevision = 0;
 
 const params = () => ({
   J: +el('sJ').value, K: +el('sK').value, Delta: +el('sD').value,
@@ -124,7 +130,7 @@ function drawOverlay(ctx, step, pad, xy) {
 
 /* -------------------------------------------------------------- panels -- */
 
-function refreshPanels() {
+function refreshPanels(record = false) {
   const b = state.board, p = params();
   const topo = topologySummary(b);
 
@@ -154,14 +160,16 @@ function refreshPanels() {
     </div>`;
   }).join('') || '<div class="gapv">no groups yet</div>';
 
-  // time series
-  const ldB = logDetColour(b, BLACK, p.lam);
-  const ldW = logDetColour(b, WHITE, p.lam);
-  state.series.push({
-    ldB: ldB === null ? 0 : ldB,
-    ldW: ldW === null ? 0 : ldW,
-    tb: topo.territoryBlack, tw: topo.territoryWhite, enc: topo.enclosure,
-  });
+  // Record only a committed turn (or the initial position), never a redraw.
+  if (record) {
+    const ldB = logDetColour(b, BLACK, p.lam);
+    const ldW = logDetColour(b, WHITE, p.lam);
+    state.series.push({
+      ldB: ldB === null ? 0 : ldB,
+      ldW: ldW === null ? 0 : ldW,
+      tb: topo.territoryBlack, tw: topo.territoryWhite, enc: topo.enclosure,
+    });
+  }
   drawPlots();
 }
 
@@ -217,95 +225,175 @@ function snapshot() {
     s: Int8Array.from(b.s), ko: b.ko,
     captured: { 1: b.captured[1], '-1': b.captured['-1'] },
     toPlay: state.toPlay, lastMove: state.lastMove, passes: state.passes,
+    gameOver: state.gameOver,
     seriesLen: state.series.length,
   });
-  if (state.history.length > 400) state.history.shift();
 }
 
 function setStatus(msg) { el('status').innerHTML = msg; }
 
+function updateControls() {
+  const humanTurn = state.toPlay === state.human;
+  el('pass').disabled = state.gameOver || state.thinking || state.selfPlay || !humanTurn;
+  el('undo').disabled = !state.history.length;
+  el('selfPlay').disabled = state.gameOver;
+  el('selfPlay').textContent = state.selfPlay ? 'Stop' : 'Watch it play itself';
+  el('selfPlay').classList.toggle('primary', state.selfPlay);
+  el('selfPlay').setAttribute('aria-pressed', String(state.selfPlay));
+  el('resumeBot').hidden = state.gameOver || state.thinking || state.selfPlay || humanTurn;
+  el('board').setAttribute('aria-busy', String(state.thinking));
+}
+
+// A terminated worker can still have a queued message. The revision makes both
+// those messages and delayed callbacks harmless after any position change.
+function cancelSearch() {
+  searchRevision++;
+  clearTimeout(botTimer);
+  botTimer = null;
+  if (searchWorker) searchWorker.terminate();
+  searchWorker = null;
+  state.thinking = false;
+}
+
 function newGame() {
+  cancelSearch();
   const n = +el('size').value;
   state.board = new Board(n);
   state.history = [];
+  state.human = BLACK;
   state.toPlay = BLACK;
   state.passes = 0;
+  state.gameOver = false;
+  state.selfPlay = false;
   state.lastMove = -1;
   state.series = [];
-  state.thinking = false;
   drawBoard();
-  refreshPanels();
+  refreshPanels(true);
+  showSearchStats(null);
+  updateControls();
   setStatus('Your move &mdash; you are <strong>Black</strong>.');
 }
 
+function finishGame() {
+  state.gameOver = true;
+  state.selfPlay = false;
+  const topo = topologySummary(state.board);
+  let black = topo.territoryBlack, white = topo.territoryWhite;
+  for (const stone of state.board.s) {
+    if (stone === BLACK) black++;
+    else if (stone === WHITE) white++;
+  }
+  white += state.komi;
+  const margin = black - white;
+  const result = margin === 0 ? 'Draw.'
+    : `<strong>${margin > 0 ? 'Black' : 'White'} wins by ${Math.abs(margin)}.</strong>`;
+  setStatus(`Both passed &mdash; game over. ${result} Black ${black}, White ${white} (including ${state.komi} komi).`);
+  updateControls();
+}
+
+function applyTurn(move, colour) {
+  snapshot();
+  let removed = [];
+  if (move < 0) {
+    state.board.pass();
+    state.passes++;
+    state.lastMove = -1;
+  } else {
+    removed = state.board.play(move, colour);
+    state.passes = 0;
+    state.lastMove = move;
+  }
+  state.toPlay = -colour;
+  drawBoard();
+  refreshPanels(true);
+  if (state.passes >= 2) finishGame();
+  else updateControls();
+  return removed;
+}
+
 function humanPlay(i) {
-  if (state.thinking || state.selfPlay) return;
-  if (state.toPlay !== state.human) return;
+  if (state.gameOver || state.thinking || state.selfPlay || state.toPlay !== state.human) return;
   if (!state.board.isLegal(i, state.human)) {
     setStatus('That move is illegal &mdash; occupied, suicide, or ko.');
     return;
   }
-  snapshot();
-  const removed = state.board.play(i, state.human);
-  state.lastMove = i;
-  state.passes = 0;
-  state.toPlay = -state.human;
-  drawBoard(); refreshPanels();
-  if (removed.length) setStatus(`You captured <strong>${removed.length}</strong>. Thinking&hellip;`);
-  else setStatus('Thinking&hellip;');
-  // let the browser paint "Thinking" before the search takes the main thread
-  setTimeout(botMove, 50);
+  const removed = applyTurn(i, state.human);
+  queueBot(removed.length ? `You captured <strong>${removed.length}</strong>. Thinking&hellip;` : 'Thinking&hellip;');
 }
 
-function botMove() {
-  if (!state.board) return;
+function humanPass() {
+  if (state.gameOver || state.thinking || state.selfPlay || state.toPlay !== state.human) return;
+  applyTurn(-1, state.human);
+  if (!state.gameOver) queueBot('You passed. Thinking&hellip;');
+}
+
+function queueBot(message = 'Thinking&hellip;', delay = 50) {
+  if (state.gameOver || state.thinking) return;
   state.thinking = true;
+  const revision = searchRevision;
+  updateControls();
+  setStatus(message);
+  botTimer = setTimeout(() => {
+    botTimer = null;
+    if (revision === searchRevision && state.thinking && !state.gameOver) botMove(revision);
+  }, delay);
+}
+
+function searchFailed(revision) {
+  if (revision !== searchRevision) return;
+  cancelSearch();
+  state.selfPlay = false;
+  showSearchStats(null);
+  updateControls();
+  setStatus('The move engine could not finish. Retry with Resume bot or Undo. If opened as a local file, serve this page over HTTP so its worker can load.');
+}
+
+function botMove(revision) {
   const colour = state.toPlay;
-  const p = params();
   const opts = {
+    budgetMs: +el('strength').value,
     temperature: +el('sTemp').value,
     wTerritory: +el('sT').value,
     wCapture: 2.0,
-    candidates: state.board.n >= 19 ? 60 : 80,
+    candidates: state.useSearch ? (state.board.n >= 19 ? 30 : 40) : (state.board.n >= 19 ? 60 : 80),
     shortlist: state.board.n >= 19 ? 10 : 12,
     replyWidth: state.board.n >= 19 ? 10 : 12,
+    passes: state.passes,
+    komi: state.komi,
   };
-  let mv;
-  if (state.useSearch) {
-    mv = mctsChooseMove(state.board, colour, p, {
-      budgetMs: +el('strength').value,
-      wTerritory: opts.wTerritory,
-      wCapture: opts.wCapture,
-      candidates: state.board.n >= 19 ? 30 : 40,
+  try {
+    if (!searchWorker) searchWorker = new Worker('search-worker.js');
+    searchWorker.onmessage = ({ data }) => {
+      if (revision !== searchRevision || data.revision !== revision || !state.thinking || colour !== state.toPlay) return;
+      if (data.error || !Number.isInteger(data.move) || data.move < -1 ||
+          (data.move >= 0 && !state.board.isLegal(data.move, colour))) {
+        searchFailed(revision);
+        return;
+      }
+      // Completing a request also invalidates a duplicate delivery.
+      searchRevision++;
+      state.thinking = false;
+      showSearchStats(data.stats);
+      const removed = applyTurn(data.move, colour);
+      if (state.gameOver) return;
+      const who = colour === BLACK ? 'Black' : 'White';
+      const message = data.move < 0 ? `<strong>${who}</strong> passed.`
+        : removed.length ? `<strong>${who}</strong> captured <strong>${removed.length}</strong>.`
+        : `<strong>${who}</strong> played.`;
+      if (state.selfPlay) queueBot(`${message} Thinking&hellip;`, 120);
+      else setStatus(`${message} Your move &mdash; you are <strong>Black</strong>.`);
+    };
+    searchWorker.onerror = event => {
+      event.preventDefault();
+      searchFailed(revision);
+    };
+    searchWorker.postMessage({
+      revision, colour, params: params(), opts, useSearch: state.useSearch,
+      board: { n: state.board.n, s: state.board.s, ko: state.board.ko, captured: state.board.captured },
     });
-    showSearchStats(mctsChooseMove.lastStats);
-  } else {
-    mv = chooseMove(state.board, colour, p, opts);
-    showSearchStats(null);
+  } catch (_) {
+    searchFailed(revision);
   }
-  if (mv < 0) {
-    state.passes++;
-    state.toPlay = -colour;
-    state.thinking = false;
-    setStatus(state.passes >= 2 ? 'Both passed &mdash; game over.'
-                                : 'It passes. Your move.');
-    if (state.passes >= 2) state.selfPlay = false;
-    return;
-  }
-  snapshot();
-  const removed = state.board.play(mv, colour);
-  state.lastMove = mv;
-  state.passes = 0;
-  state.toPlay = -colour;
-  state.thinking = false;
-  drawBoard(); refreshPanels();
-
-  const who = colour === BLACK ? 'Black' : 'White';
-  setStatus(removed.length
-    ? `<strong>${who}</strong> captured <strong>${removed.length}</strong>.`
-    : `<strong>${who}</strong> played. Your move.`);
-
-  if (state.selfPlay) setTimeout(botMove, 120);
 }
 
 function showSearchStats(st) {
@@ -314,13 +402,15 @@ function showSearchStats(st) {
     return;
   }
   el('tIters').textContent = st.iterations.toLocaleString();
-  el('tWin').textContent = (100 * st.winRate).toFixed(0) + '%';
+  el('tWin').textContent = st.winRate == null ? '\u2014' : (100 * st.winRate).toFixed(0) + '%';
   el('tVisits').textContent = st.visits.toLocaleString();
   el('tKids').textContent = st.children;
 }
 
 function undo() {
-  if (state.selfPlay || !state.history.length) return;
+  if (!state.history.length) return;
+  cancelSearch();
+  state.selfPlay = false;
   // step back over the bot's reply and your own move
   for (let k = 0; k < 2 && state.history.length; k++) {
     const h = state.history.pop();
@@ -330,10 +420,13 @@ function undo() {
     state.toPlay = h.toPlay;
     state.lastMove = h.lastMove;
     state.passes = h.passes;
+    state.gameOver = h.gameOver;
     state.series.length = h.seriesLen;
     if (state.toPlay === state.human) break;
   }
-  drawBoard(); drawPlots(); refreshPanels();
+  drawBoard(); refreshPanels();
+  showSearchStats(null);
+  updateControls();
   setStatus('Taken back. Your move.');
 }
 
@@ -358,42 +451,53 @@ function wire() {
     if (i >= 0) humanPlay(i);
   });
 
-  el('newGame').addEventListener('click', () => { state.selfPlay = false; newGame(); });
-  el('size').addEventListener('change', () => { state.selfPlay = false; newGame(); });
-  el('pass').addEventListener('click', () => {
-    if (state.thinking || state.selfPlay) return;
-    snapshot();
-    state.passes++;
-    state.toPlay = -state.human;
-    setStatus('You passed. Thinking&hellip;');
-    setTimeout(botMove, 30);
-  });
+  el('newGame').addEventListener('click', newGame);
+  el('size').addEventListener('change', newGame);
+  el('pass').addEventListener('click', humanPass);
   el('undo').addEventListener('click', undo);
+  el('resumeBot').addEventListener('click', () => {
+    if (state.toPlay !== state.human) queueBot();
+  });
 
   el('engineMcts').addEventListener('click', () => {
     state.useSearch = true;
     el('engineMcts').classList.add('primary');
     el('enginePolicy').classList.remove('primary');
+    el('engineMcts').setAttribute('aria-pressed', 'true');
+    el('enginePolicy').setAttribute('aria-pressed', 'false');
   });
   el('enginePolicy').addEventListener('click', () => {
     state.useSearch = false;
     el('enginePolicy').classList.add('primary');
     el('engineMcts').classList.remove('primary');
+    el('enginePolicy').setAttribute('aria-pressed', 'true');
+    el('engineMcts').setAttribute('aria-pressed', 'false');
     showSearchStats(null);
   });
 
   el('selfPlay').addEventListener('click', () => {
-    state.selfPlay = !state.selfPlay;
-    el('selfPlay').textContent = state.selfPlay ? 'Stop' : 'Watch it play itself';
-    el('selfPlay').classList.toggle('primary', state.selfPlay);
-    if (state.selfPlay) botMove();
+    if (state.gameOver) return;
+    if (state.selfPlay) {
+      state.selfPlay = false;
+      cancelSearch();
+      updateControls();
+      setStatus(state.toPlay === state.human ? 'Stopped. Your move &mdash; you are <strong>Black</strong>.'
+        : 'Stopped. White to play &mdash; Resume bot to continue.');
+    } else {
+      state.selfPlay = true;
+      updateControls();
+      queueBot();
+    }
   });
 
   const overlays = { ovNone: 'none', ovTerr: 'territory', ovGap: 'gap', ovChamber: 'chamber' };
   for (const [id, mode] of Object.entries(overlays)) {
     el(id).addEventListener('click', () => {
       state.overlay = mode;
-      for (const other of Object.keys(overlays)) el(other).classList.toggle('primary', other === id);
+      for (const other of Object.keys(overlays)) {
+        el(other).classList.toggle('primary', other === id);
+        el(other).setAttribute('aria-pressed', String(other === id));
+      }
       drawBoard();
     });
   }

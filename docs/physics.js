@@ -98,6 +98,11 @@ class Board {
     return removed;
   }
 
+  /** Passing consumes the turn and releases the simple-ko restriction. */
+  pass() {
+    this.ko = -1;
+  }
+
   legalMoves(colour) {
     const out = [];
     for (let i = 0; i < this.s.length; i++) if (this.isLegal(i, colour)) out.push(i);
@@ -107,8 +112,15 @@ class Board {
 
 /* ----------------------------------------------------------- laplacian -- */
 
+function validateRootScale(lam) {
+  if (!Number.isFinite(lam) || lam <= 0) {
+    throw new RangeError('lam must be finite and positive');
+  }
+}
+
 /** M = L + R for one group, dense and symmetric. */
 function groupMatrix(board, stones, lam) {
+  validateRootScale(lam);
   const pos = new Map();
   stones.forEach((s, k) => pos.set(s, k));
   const n = stones.length;
@@ -124,8 +136,8 @@ function groupMatrix(board, stones, lam) {
   return M;
 }
 
-/** Cholesky log-determinant. Returns null when M is not positive definite,
- *  which happens exactly when some group has no liberty. */
+/** Cholesky log-determinant. Returns null for a nonpositive pivot.
+ *  Board-level callers check exact dead groups before factorization. */
 function logDetSPD(M) {
   const n = M.length;
   const L = Array.from({ length: n }, () => new Float64Array(n));
@@ -135,7 +147,7 @@ function logDetSPD(M) {
       let sum = M[i][j];
       for (let k = 0; k < j; k++) sum -= L[i][k] * L[j][k];
       if (i === j) {
-        if (sum <= 1e-12) return null;      // singular => a dead group
+        if (!Number.isFinite(sum) || sum <= 0) return null;
         L[i][i] = Math.sqrt(sum);
         ld += 2 * Math.log(L[i][i]);
       } else {
@@ -181,17 +193,21 @@ function smallestEigenvalue(M) {
 
 /** lambda_min(L+R) per group: the liberty gap. Zero means dead. */
 function libertyGaps(board, colour, lam) {
+  validateRootScale(lam);
   return board.groups(colour).map(g => ({
     stones: g.stones,
     libs: g.libs.length,
-    gap: smallestEigenvalue(groupMatrix(board, g.stones, lam)),
+    gap: g.libs.length ? smallestEigenvalue(groupMatrix(board, g.stones, lam)) : 0,
   }));
 }
 
 /** sum_groups log det(L+R); null if any group of this colour is dead. */
 function logDetColour(board, colour, lam) {
+  validateRootScale(lam);
   let total = 0;
   for (const g of board.groups(colour)) {
+    // A singular Laplacian can acquire a positive numerical pivot by roundoff.
+    if (g.libs.length === 0) return null;
     const ld = logDetSPD(groupMatrix(board, g.stones, lam));
     if (ld === null) return null;
     total += ld;

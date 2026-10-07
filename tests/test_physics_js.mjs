@@ -60,6 +60,44 @@ function close(a, b, tol = 1e-9) { return Math.abs(a - b) < tol; }
   check('surrounded stone: gap = 0', close(smallestEigenvalue(groupMatrix(b, [c], 1.0)), 0, 1e-6));
 }
 
+/* --- exact zero modes and root scales --------------------------------- */
+{
+  const p = { J: 1, K: 0.4, Delta: 0.2, h: 0, alpha: 1, beta: 1, lam: 1 };
+  for (const n of [2, 5, 6, 9]) {
+    for (const colour of [BLACK, WHITE]) {
+      const b = new Board(n);
+      b.s.fill(colour);
+      check(`dense dead ${n}x${n}, colour ${colour}: log determinant is null`,
+            logDetColour(b, colour, 1) === null);
+      check(`dense dead ${n}x${n}, colour ${colour}: exact zero gap`,
+            ctx.libertyGaps(b, colour, 1)[0].gap === 0);
+      check(`dense dead ${n}x${n}, colour ${colour}: infinite effective energy`,
+            ctx.hEff(b, p) === Infinity);
+    }
+  }
+
+  const b = new Board(5);
+  b.s[12] = BLACK;
+  for (const lam of [1e-14, 0.25, 3]) {
+    check(`positive root scale ${lam}: finite live determinant`,
+          close(logDetColour(b, BLACK, lam), Math.log(4 * lam)));
+    check(`positive root scale ${lam}: correct isolated gap`,
+          ctx.libertyGaps(b, BLACK, lam)[0].gap === 4 * lam);
+  }
+  const empty = new Board(5);
+  for (const lam of [0, -1, Infinity, -Infinity, NaN]) {
+    for (const call of [
+      () => groupMatrix(empty, [], lam),
+      () => ctx.libertyGaps(empty, BLACK, lam),
+      () => logDetColour(empty, BLACK, lam),
+    ]) {
+      let rejected = false;
+      try { call(); } catch (err) { rejected = err instanceof RangeError; }
+      check(`invalid root scale ${lam} is rejected on empty boards`, rejected);
+    }
+  }
+}
+
 /* --- the determinant theorem on random positions ---------------------- */
 {
   let rngState = 12345;
@@ -141,6 +179,19 @@ function close(a, b, tol = 1e-9) { return Math.abs(a - b) < tol; }
 }
 
 /* --- suicide and ko --------------------------------------------------- */
+{
+  const b = new Board(5);
+  for (const i of [1, 5, 11]) b.s[i] = BLACK;
+  for (const i of [6, 2, 12, 8]) b.s[i] = WHITE;
+  b.play(7, BLACK);
+  check('simple ko forbids immediate recapture', b.ko === 6 && !b.isLegal(6, WHITE));
+  const stones = [...b.s], captured = { ...b.captured };
+  b.pass();
+  check('pass releases the simple ko restriction', b.ko === -1 && b.isLegal(6, WHITE));
+  check('pass preserves stones and capture counts',
+        b.s.every((stone, i) => stone === stones[i]) &&
+        b.captured[BLACK] === captured[BLACK] && b.captured[WHITE] === captured[WHITE]);
+}
 {
   const b = new Board(5);
   const c = 2 * 5 + 2;

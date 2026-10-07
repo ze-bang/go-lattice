@@ -52,7 +52,11 @@ for (const n of [5, 9, 13]) {
 
       const legal = [];
       for (let i = 0; i < ref.s.length; i++) if (ref.isLegal(i, colour)) legal.push(i);
-      if (!legal.length) { if (++passes >= 2) break; colour = -colour; continue; }
+      if (!legal.length) {
+        ref.pass(); fb.pass();
+        if (++passes >= 2) break;
+        colour = -colour; continue;
+      }
       passes = 0;
 
       const mv = legal[(rnd() * legal.length) | 0];
@@ -95,6 +99,29 @@ for (const n of [5, 9, 13]) {
         !mismatch, mismatch || '');
 }
 
+/* -- imported positions and passing retain the correct game state -------- */
+{
+  const ref = new Board(5);
+  for (const i of [1, 5, 11]) ref.s[i] = BLACK;
+  for (const i of [2, 6, 8, 12]) ref.s[i] = WHITE;
+  ref.play(7, BLACK);
+  check('fixture creates a simple ko', ref.ko === 6 && !ref.isLegal(6, WHITE));
+  ref.captured[WHITE] = 4;
+  const fb = toFastBoard(ref);
+  check('import preserves stones and ko', fb.ko === 6 &&
+    fb.s.every((stone, i) => stone === ref.s[i]));
+  check('import preserves both capture totals', fb.capturedBlack === 1 && fb.capturedWhite === 4);
+  check('immediate recapture is forbidden', !fb.isLegal(6, WHITE));
+
+  const next = fb.clone();
+  next.pass();
+  check('a pass releases ko without changing stones or captures', next.ko === -1 &&
+    next.isLegal(6, WHITE) && next.s.every((stone, i) => stone === fb.s[i]) &&
+    next.capturedBlack === 1 && next.capturedWhite === 4);
+  check('passing on a clone leaves the source ko intact', fb.ko === 6);
+  check('komi is subtracted from the area score', next.areaScore(6.5) === next.areaScore() - 6.5);
+}
+
 /* -- capture, suicide, ko ---------------------------------------------- */
 {
   const fb = new FastBoard(5);
@@ -130,7 +157,11 @@ for (const n of [5, 9, 13]) {
       for (let i = 0; i < ref.s.length; i++) {
         if (ref.isLegal(i, colour) && !fb.isEye(i, colour)) legal.push(i);
       }
-      if (!legal.length) { if (++passes >= 2) break; colour = -colour; continue; }
+      if (!legal.length) {
+        ref.pass(); fb.pass();
+        if (++passes >= 2) break;
+        colour = -colour; continue;
+      }
       passes = 0;
       const mv = legal[(rnd() * legal.length) | 0];
       ref.play(mv, colour); fb.play(mv, colour);

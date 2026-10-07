@@ -219,9 +219,14 @@ class FastBoard {
     return captured;
   }
 
-  /** Tromp-Taylor area score, Black minus White. Only meaningful at the end
-   *  of a playout, where every empty region is surrounded by one colour. */
-  areaScore() {
+  /** A pass consumes a turn and lifts the simple-ko prohibition. */
+  pass() {
+    this.ko = -1;
+  }
+
+  /** Stones plus single-colour territory, Black minus White minus komi.
+   *  Shared empty regions are neutral; dead stones must be played out. */
+  areaScore(komi = 0) {
     let black = 0, white = 0;
     const seen = new Uint8Array(this.N);
     const stack = new Int32Array(this.N);
@@ -246,7 +251,7 @@ class FastBoard {
       if (touchB && !touchW) black += count;
       else if (touchW && !touchB) white += count;
     }
-    return black - white;
+    return black - white - komi;
   }
 }
 
@@ -257,5 +262,7 @@ function toFastBoard(board) {
     if (board.s[i] !== 0) fb.play(i, board.s[i]);
   }
   fb.ko = board.ko;
+  fb.capturedBlack = board.captured[FB_BLACK];
+  fb.capturedWhite = board.captured[FB_WHITE];
   return fb;
 }

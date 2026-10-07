@@ -109,11 +109,13 @@
   <header>
     <h1>go&#8209;lattice &mdash; <span>playing Go against the physics</span></h1>
     <p class="sub">
-      No neural network, no opening book, and no evaluation function that wasn't derived from the
-      model. The bot ranks moves by liberty structure &mdash; the same root weights
-      <em>R</em> that the liberty&#8209;gap plot draws &mdash; looks one move ahead to see whether the
-      reply refutes it, and samples from a Boltzmann weight. It is weak: a club player will take it
-      apart. It is, however, transparent, and the sliders really are coefficients in its scoring.
+      Explore a physics&#8209;inspired Go bot guided by a spin&#8209;1 lattice model and liberty structure &mdash;
+      the same root weights <em>R</em> that the liberty&#8209;gap plot draws.
+      Search uses that score to guide Monte Carlo tree search. Score only compares moves
+      with one reply of lookahead and samples from a Boltzmann weight.
+      This is an experimental bot, with no neural network or opening book;
+      the sliders let you explore how its scoring changes its play. Move scoring also includes
+      hand&#8209;tuned tactical and shape heuristics.
       <a href="https://github.com/ze-bang/go-lattice">Source and the write&#8209;up</a>.
     </p>
   </header>
@@ -123,8 +125,8 @@
     <!-- ============================ board ============================ -->
     <div>
       <div class="card" id="boardWrap">
-        <canvas id="board" width="640" height="640"></canvas>
-        <div class="status" id="status">Your move &mdash; you are Black.</div>
+        <canvas id="board" width="640" height="640" aria-label="Go board. Click an intersection to play Black."></canvas>
+        <div class="status" id="status" role="status" aria-live="polite" aria-atomic="true">Your move &mdash; you are Black.</div>
       </div>
 
       <div class="stack">
@@ -134,48 +136,54 @@
             <button class="primary" id="newGame">New game</button>
             <button id="pass">Pass</button>
             <button id="undo">Undo</button>
-            <button id="selfPlay">Watch it play itself</button>
-            <select id="size">
+            <button id="selfPlay" aria-pressed="false">Watch it play itself</button>
+            <button id="resumeBot" hidden>Resume bot</button>
+            <select id="size" aria-label="Board size">
               <option value="9" selected>9 &times; 9</option>
               <option value="13">13 &times; 13</option>
               <option value="19">19 &times; 19</option>
             </select>
           </div>
           <div class="row">
-            <button class="primary" id="engineMcts">Search</button>
-            <button id="enginePolicy">Score only</button>
-            <select id="strength">
+            <button class="primary" id="engineMcts" aria-pressed="true">Search</button>
+            <button id="enginePolicy" aria-pressed="false">Score only</button>
+            <select id="strength" aria-label="Search time per move">
               <option value="150">quick &mdash; 0.15s</option>
               <option value="400" selected>normal &mdash; 0.4s</option>
               <option value="1200">strong &mdash; 1.2s</option>
             </select>
           </div>
           <div class="row">
-            <button id="ovNone" class="primary">No overlay</button>
-            <button id="ovTerr">Territory</button>
-            <button id="ovGap">Liberty gap</button>
-            <button id="ovChamber">Chambers</button>
+            <button id="ovNone" class="primary" aria-pressed="true">No overlay</button>
+            <button id="ovTerr" aria-pressed="false">Territory</button>
+            <button id="ovGap" aria-pressed="false">Liberty gap</button>
+            <button id="ovChamber" aria-pressed="false">Chambers</button>
           </div>
+          <p class="note">Rules: simple ko, no suicide, zero komi. Two consecutive passes end the game.
+            Area score counts stones on the board plus empty regions touching only that colour;
+            captures are not added separately. Play out disputed groups before passing:
+            remaining stones are counted as played, with no dead&#8209;stone adjudication.</p>
         </div>
 
         <div class="card">
           <h2>Model parameters</h2>
-          <div class="slider"><label>J</label><input type="range" data-term="shapeJ" id="sJ" min="-1" max="3" step="0.05" value="1"><span class="val" id="vJ">1.00</span></div>
-          <div class="slider"><label>K</label><input type="range" data-term="shapeK" id="sK" min="-1" max="3" step="0.05" value="0.4"><span class="val" id="vK">0.40</span></div>
-          <div class="slider"><label>&Delta;</label><input type="range" data-term="delta" id="sD" min="-2" max="3" step="0.05" value="0.2"><span class="val" id="vD">0.20</span></div>
-          <div class="slider"><label>&alpha;</label><input type="range" data-term="alpha" id="sA" min="0" max="4" step="0.05" value="1"><span class="val" id="vA">1.00</span></div>
-          <div class="slider"><label>territory</label><input type="range" data-term="terr" id="sT" min="0" max="4" step="0.05" value="1"><span class="val" id="vT">1.00</span></div>
-          <div class="slider"><label>temp</label><input type="range" data-term="temp" id="sTemp" min="0" max="2" step="0.05" value="0.25"><span class="val" id="vTemp">0.25</span></div>
+          <div class="slider"><label for="sJ">J</label><input type="range" data-term="shapeJ" id="sJ" min="-1" max="3" step="0.05" value="1"><span class="val" id="vJ">1.00</span></div>
+          <div class="slider"><label for="sK">K</label><input type="range" data-term="shapeK" id="sK" min="-1" max="3" step="0.05" value="0.4"><span class="val" id="vK">0.40</span></div>
+          <div class="slider"><label for="sD">&Delta;</label><input type="range" data-term="delta" id="sD" min="-2" max="3" step="0.05" value="0.2"><span class="val" id="vD">0.20</span></div>
+          <div class="slider"><label for="sA">&alpha;</label><input type="range" data-term="alpha" id="sA" min="0" max="4" step="0.05" value="1"><span class="val" id="vA">1.00</span></div>
+          <div class="slider"><label for="sT">territory</label><input type="range" data-term="terr" id="sT" min="0" max="4" step="0.05" value="1"><span class="val" id="vT">1.00</span></div>
+          <div class="slider"><label for="sTemp">temp</label><input type="range" data-term="temp" id="sTemp" min="0" max="2" step="0.05" value="0.25"><span class="val" id="vTemp">0.25</span></div>
           <p class="note">
             Move a slider and the term it controls lights up in the panel below.
+            Changes apply when the next move calculation starts.
           </p>
         </div>
 
         <div class="card">
           <h2>What the bot is scoring</h2>
           <p class="note" style="margin-top:0;margin-bottom:.6rem">
-            Every legal move gets a score &mdash; <strong>lower is better</strong> &mdash; from these
-            terms. The sliders above <em>are</em> the coefficients.
+            Candidate moves get a score &mdash; <strong>lower is better</strong> &mdash; using these
+            terms alongside tactical and opening heuristics. The sliders control the displayed coefficients.
           </p>
 
           <div class="frow" data-term="delta">
@@ -224,17 +232,17 @@
 
           <div class="fsum">
             <code>S = (terms above) &minus; 0.8 &times; S(opponent's best reply)</code>
-            <span class="tdesc">One ply of lookahead. Without it a stone that dies on the very next
+            <span class="tdesc">Score only uses one ply of lookahead. Without it a stone that dies on the very next
             move scores perfectly well, which is what made an earlier version of this bot feed
             stones to its opponent all game.</span>
           </div>
 
           <div class="fsum" data-term="temp">
             <code>P(move) &prop; exp(&minus;S / <span id="fTemp">0.25</span>)</code>
-            <span class="tdesc">It samples rather than always taking the best move. At
-            <strong>temp&nbsp;=&nbsp;0</strong> it is deterministic; past about 0.5 it wanders and
-            starts losing groups &mdash; the same energy&ndash;entropy trade&#8209;off the equilibrium
-            model has.</span>
+            <span class="tdesc">Score only samples rather than always taking the best move;
+            <strong>temp&nbsp;=&nbsp;0</strong> selects the lowest score. Search uses temperature
+            to shape its move priors and still runs random playouts. Higher temperatures spread
+            weight across more moves &mdash; an energy&ndash;entropy trade&#8209;off.</span>
           </div>
         </div>
       </div>
@@ -247,16 +255,16 @@
         <h2>Search</h2>
         <div class="tiles">
           <div class="tile"><div class="k">playouts</div><div class="v" id="tIters">&mdash;</div></div>
-          <div class="tile"><div class="k">it thinks it wins</div><div class="v" id="tWin">&mdash;</div></div>
+          <div class="tile"><div class="k">playout win rate</div><div class="v" id="tWin">&mdash;</div></div>
           <div class="tile"><div class="k">visits on move</div><div class="v" id="tVisits">&mdash;</div></div>
           <div class="tile"><div class="k">moves considered</div><div class="v" id="tKids">&mdash;</div></div>
         </div>
         <p class="note">
           The physics score is the <em>prior</em>: it decides where the search looks first, through
           <em>P</em> in PUCT&nbsp;= <em>Q</em>&nbsp;+&nbsp;<em>c&thinsp;P</em>&thinsp;&radic;<em>N</em>&thinsp;/&thinsp;(1+<em>n</em>).
-          <em>Q</em> then comes from playing the position out to the end thousands of times, so the
+          <em>Q</em> then comes from repeated simulated continuations, so the
           sliders still steer it but no longer have the last word. Turn search off to play the raw
-          score again &mdash; it is much weaker.
+          score again. The win rate describes those simulations, not a calibrated winning probability.
         </p>
       </div>
 
@@ -265,8 +273,8 @@
         <div class="tiles">
           <div class="tile"><div class="k">&beta;&#8320; empty</div><div class="v" id="tB0">1</div></div>
           <div class="tile"><div class="k">enclosure &#8496;</div><div class="v" id="tEnc">0</div></div>
-          <div class="tile b"><div class="k">Black area</div><div class="v" id="tTB">0</div></div>
-          <div class="tile w"><div class="k">White area</div><div class="v" id="tTW">0</div></div>
+          <div class="tile b"><div class="k">Black empty territory</div><div class="v" id="tTB">0</div></div>
+          <div class="tile w"><div class="k">White empty territory</div><div class="v" id="tTW">0</div></div>
           <div class="tile b"><div class="k">Black caught</div><div class="v" id="tCB">0</div></div>
           <div class="tile w"><div class="k">White caught</div><div class="v" id="tCW">0</div></div>
         </div>
@@ -281,14 +289,15 @@
         <h2>Liberty gap &lambda;<sub>min</sub>(L+R)</h2>
         <div class="gaps" id="gaps"></div>
         <p class="note">
-          One bar per group. The gap falls toward zero as a group runs out of independent
-          routes to a liberty; it is exactly zero at capture, where det(L+R) vanishes.
+          Estimated smallest eigenvalue, one bar per group. A zero gap identifies a group
+          with no liberties; positive gaps measure rooting strength, not whether a group
+          can live against best play.
         </p>
       </div>
 
       <div class="card">
         <h2>log det(L+R) over the game</h2>
-        <canvas class="plot" id="plotDet" width="700" height="220"></canvas>
+        <canvas class="plot" id="plotDet" width="700" height="220" role="img" aria-label="Black and White log determinant over the game"></canvas>
         <div class="legend">
           <span><i style="background:#181818"></i>Black</span>
           <span><i style="background:#2f6f6f"></i>White</span>
@@ -297,10 +306,10 @@
 
       <div class="card">
         <h2>Territory and enclosure</h2>
-        <canvas class="plot" id="plotTerr" width="700" height="220"></canvas>
+        <canvas class="plot" id="plotTerr" width="700" height="220" role="img" aria-label="Black and White empty territory and enclosure over the game"></canvas>
         <div class="legend">
-          <span><i style="background:#181818"></i>Black area</span>
-          <span><i style="background:#2f6f6f"></i>White area</span>
+          <span><i style="background:#181818"></i>Black territory</span>
+          <span><i style="background:#2f6f6f"></i>White territory</span>
           <span><i style="background:#c0862f"></i>&#8496;</span>
         </div>
       </div>

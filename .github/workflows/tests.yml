@@ -1,0 +1,33 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/setup-node@v7.0.0
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install Python test dependencies
+        run: python -m pip install numpy pytest
+      - name: Python reference and determinant regressions
+        run: python -m pytest tests/ -q
+      - name: Browser physics invariants
+        run: node tests/test_physics_js.mjs
+      - name: Fast board against the reference board
+        run: node tests/test_fastboard.mjs
+      - name: Search regressions
+        run: node tests/test_mcts.mjs
+      - name: Game controls and worker lifecycle
+        run: node tests/test_app.mjs

@@ -15,13 +15,26 @@ function trace used as a vulnerability measure.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 
-from .board import EMPTY, Board
+from .board import Board
+
+
+def _validate_root_scale(lam: float) -> None:
+    """The liberty-determinant theorem assumes finite, positive root weights."""
+    if not math.isfinite(lam) or lam <= 0:
+        raise ValueError("lam must be finite and positive")
+
+
+def _has_liberty(board: Board, group: set[int]) -> bool:
+    return any(board.liberty_count(i) for i in group)
 
 
 def group_matrix(board: Board, group: set[int], lam: float = 1.0) -> np.ndarray:
     """M = L + R for a single group, as a dense symmetric matrix."""
+    _validate_root_scale(lam)
     sites = sorted(group)
     pos = {s: k for k, s in enumerate(sites)}
     M = np.zeros((len(sites), len(sites)))
@@ -38,16 +51,24 @@ def group_matrix(board: Board, group: set[int], lam: float = 1.0) -> np.ndarray:
 
 def liberty_gap(board: Board, group: set[int], lam: float = 1.0) -> float:
     """lambda_min(L + R). Zero exactly when the group has no liberty."""
+    _validate_root_scale(lam)
     if not group:
         return float("inf")
+    if not _has_liberty(board, group):
+        return 0.0
     M = group_matrix(board, group, lam)
     return float(np.linalg.eigvalsh(M)[0])
 
 
 def log_det(board: Board, colour: int, lam: float = 1.0) -> float:
     """sum_groups log det(L + R) for one colour; -inf if any group is dead."""
+    _validate_root_scale(lam)
     total = 0.0
-    for g, _ in board.groups(colour):
+    for g, libs in board.groups(colour):
+        # Roundoff can give a singular graph Laplacian a positive determinant.
+        # Its exact zero mode is known from the board, before factorization.
+        if not libs:
+            return float("-inf")
         M = group_matrix(board, g, lam)
         sign, ld = np.linalg.slogdet(M)
         if sign <= 0:
@@ -58,8 +79,11 @@ def log_det(board: Board, colour: int, lam: float = 1.0) -> float:
 
 def vulnerability(board: Board, group: set[int], lam: float = 1.0) -> float:
     """Tr (L + R)^{-1}. Diverges as the group approaches capture."""
+    _validate_root_scale(lam)
     if not group:
         return 0.0
+    if not _has_liberty(board, group):
+        return float("inf")
     M = group_matrix(board, group, lam)
     try:
         return float(np.trace(np.linalg.inv(M)))
@@ -69,6 +93,7 @@ def vulnerability(board: Board, group: set[int], lam: float = 1.0) -> float:
 
 def all_gaps(board: Board, colour: int, lam: float = 1.0) -> list[tuple[set[int], float]]:
     """Liberty gap for every group of one colour."""
+    _validate_root_scale(lam)
     return [(g, liberty_gap(board, g, lam)) for g, _ in board.groups(colour)]
 
 
