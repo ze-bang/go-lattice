@@ -37,10 +37,10 @@ liberty rule  →  Laplacian determinant  →  rooted forests  →  fermionic fi
 
 Two consequences worth stating plainly:
 
-- **A living group is a domain with a sink.** `M = L + R` is a killed Laplacian; liberties
+- **A group with a liberty is a domain with a sink.** `M = L + R` is a killed Laplacian; liberties
   are absorbing roots. Capture is the spectral event `λ_min → 0`. That smallest eigenvalue
-  — the *liberty gap* — is a continuous measure of how close a group is to dying, and the
-  bot plots it live.
+  — the *liberty gap* — measures rooting strength, and the bot plots it live. A positive
+  gap certifies a current liberty; it does not establish life against best play.
 - **Territory is complement topology.** Empty regions are the connected components of the
   complement of the barrier `B = stones ∪ board edge`. By Alexander duality on the sphere,
   extra complement components are exactly the H¹ classes of the barrier, so the enclosure
@@ -58,18 +58,20 @@ Go is the system that tells you which local constraint to study.
 ```
 paper/       the write-up (LaTeX + PDF, 21pp)
 golattice/   Python reference implementation
-tests/       the theorems, tested — Python and JS agree numerically
+tests/       physics invariants, board rules, search, and game controls
 docs/
   physics.js    the model: Laplacian, forests, chambers, move score
   fastboard.js  union-find board built for playouts
   mcts.js       tree search, with the physics score as prior
+  search-worker.js  background search so game controls stay responsive
   index.html    the page
 ```
 
 ## The bot
 
-`docs/` is a self-contained page with no dependencies. No neural network, no opening
-book, and nothing in the evaluation that wasn't derived from the model.
+`docs/` is a static page with no JavaScript dependencies. It uses no neural network or
+opening book. The evaluation combines the model's liberty and territory quantities
+with hand-tuned tactical, opening, and shape heuristics.
 
 The first version scored moves by the change in `H_eff` — which is the right object for
 the equilibrium model and the wrong one for choosing a move. **`log det` is extensive.**
@@ -147,16 +149,36 @@ MCTS won 10/10       margins: 15, 11, 11, 17, 23, 11, 9, 35, 13, 31
 `Score only` on the page turns the search off if you want to play the bare model again.
 19×19 is the weak case — a few hundred playouts is thin for a board that size.
 
+Both engines run in a Web Worker. New game, Undo, and Stop cancel pending work, so
+an old search cannot place a stone into a new position. Passes are undoable turns;
+they clear simple ko, and two consecutive passes end the game. The displayed result
+uses area scoring (stones plus surrounded empty points), zero komi, and no automatic
+dead-stone removal. Play out disputed groups before passing.
+
+Search includes passing as an action, including after an opponent's pass. Its prior
+compares the stone score with the pass threshold, so Δ affects whether to continue;
+temperature controls the root prior in Search and move sampling in Score only.
+
 Incremental liberty bookkeeping fails silently, so `tests/test_fastboard.mjs` plays ~140
 random games in lockstep against the reference board and compares legality **at every
 point on every move**, plus ko, liberty class, the atari point, and the area score
 against `topology.js`.
 
+## Running locally
+
+Serve the page over HTTP so the browser can load its worker:
+
+```bash
+python -m http.server 8000 --directory docs
+```
+
+Open `http://localhost:8000`. The hosted page works without any setup.
+
 ## Running the Python side
 
 ```bash
 pip install numpy pytest
-PYTHONPATH=. python -m pytest tests/ -q
+python -m pytest tests/ -q
 ```
 
 ```python
@@ -173,15 +195,26 @@ print(liberty_gap(b, g))   # λ_min(L+R): how far from capture
 print(summary(b))          # β₀, enclosure, territory
 ```
 
-The JS engine in `docs/physics.js` is a port of the same functions, and
-`tests/test_physics_js.mjs` checks it against the same invariants:
+The board, Laplacian, and topology functions in `docs/physics.js` follow the Python
+reference. Their test suites check the same invariants; the browser's move policy
+has evolved separately from `golattice/engine.py`. Run all JavaScript checks with:
 
 ```bash
 node tests/test_physics_js.mjs
+node tests/test_fastboard.mjs
+node tests/test_mcts.mjs
+node tests/test_app.mjs
 ```
 
-If the two ever disagree — on the determinant theorem, on the liberty gap vanishing
-exactly at capture, on the chamber count — that suite fails.
+The tests cover the determinant theorem, the liberty gap vanishing at capture,
+chamber counts, capture/ko/pass rules, deterministic search, and cancellation of
+stale worker replies. GitHub Actions runs the Python and JavaScript suites on pushes
+and pull requests.
+
+Root weights require finite `λ > 0`. Dead groups are identified from their exact
+liberty sets before numerical factorization, since roundoff can otherwise give a
+singular Laplacian a positive determinant. The browser's nonzero liberty gaps use
+an iterative approximation; Python uses a dense symmetric eigensolver.
 
 ## Status
 

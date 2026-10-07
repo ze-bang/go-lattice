@@ -39,9 +39,11 @@ function legalNonEye(fb, colour, buf) {
 }
 
 /** One rollout to the end, with a light liberty-driven policy. */
-function rollout(fb0, colour, buf, rng) {
+function rollout(fb0, colour, buf, rng, passes = 0, komi = 0) {
   const fb = fb0.clone();
-  let col = colour, passes = 0;
+  let col = colour;
+
+  if (passes >= 2) return fb.areaScore(komi);
 
   for (let step = 0; step < fb.N * 2; step++) {
     let move = -1;
@@ -64,7 +66,12 @@ function rollout(fb0, colour, buf, rng) {
 
     if (move < 0) {
       const m = legalNonEye(fb, col, buf);
-      if (!m) { if (++passes >= 2) break; col = -col; continue; }
+      if (!m) {
+        fb.pass();
+        if (++passes >= 2) break;
+        col = -col;
+        continue;
+      }
       move = buf[(rng() * m) | 0];
     }
 
@@ -72,17 +79,19 @@ function rollout(fb0, colour, buf, rng) {
     fb.play(move, col);
     col = -col;
   }
-  return fb.areaScore();
+  return fb.areaScore(komi);
 }
 
-/** Expand a node: children are the legal non-eye moves, uniform prior. */
+/** Expand a node: legal non-eye moves and pass, with a uniform prior. */
 function expand(node, fb, colour, buf) {
   const m = legalNonEye(fb, colour, buf);
-  node.moves = buf.slice(0, m);
-  node.kids = new Array(m);
-  const p = m ? 1 / m : 0;
-  for (let k = 0; k < m; k++) node.kids[k] = new MctsNode(p);
-  return m;
+  node.moves = new Int32Array(m + 1);
+  node.moves.set(buf.subarray(0, m));
+  node.moves[m] = -1;
+  node.kids = new Array(m + 1);
+  const p = 1 / (m + 1);
+  for (let k = 0; k <= m; k++) node.kids[k] = new MctsNode(p);
+  return m + 1;
 }
 
 function selectChild(node) {
@@ -100,25 +109,27 @@ function selectChild(node) {
 }
 
 /** One iteration: descend, expand a leaf, roll out, back the value up. */
-function iterate(root, fb0, colour, buf, rng) {
+function iterate(root, fb0, colour, buf, rng, initialPasses = 0, komi = 0) {
   const path = [root];
   const fb = fb0.clone();
-  let col = colour;
+  let col = colour, passes = initialPasses;
 
   let node = root;
-  while (node.kids && node.kids.length) {
+  while (passes < 2 && node.kids && node.kids.length) {
     const k = selectChild(node);
     if (k < 0) break;
-    fb.play(node.moves[k], col);
+    const move = node.moves[k];
+    if (move < 0) { fb.pass(); passes++; }
+    else { fb.play(move, col); passes = 0; }
     col = -col;
     node = node.kids[k];
     path.push(node);
     if (node.n === 0) break;            // new leaf: roll out from here
   }
 
-  if (node.n > 0 && !node.kids) expand(node, fb, col, buf);
+  if (passes < 2 && node.n > 0 && !node.kids) expand(node, fb, col, buf);
 
-  const scoreBlack = rollout(fb, col, buf, rng);
+  const scoreBlack = rollout(fb, col, buf, rng, passes, komi);
   // value in [-1, 1] from Black's point of view, then per-node perspective
   const vBlack = scoreBlack > 0 ? 1 : (scoreBlack < 0 ? -1 : 0);
 
@@ -136,11 +147,18 @@ function iterate(root, fb0, colour, buf, rng) {
  * `p` the model parameters, and the physics score sets the root prior.
  */
 function mctsChooseMove(board, colour, p, opts = {}) {
+  // A forced pass must never display statistics from the previous position.
+  mctsChooseMove.lastStats = { iterations: 0, winRate: null, visits: 0, children: 0 };
   const budgetMs = opts.budgetMs ?? 500;
+  const maxIterations = opts.maxIterations ?? Infinity;
   const wTerr = opts.wTerritory ?? 1.0;
   const wCap = opts.wCapture ?? 2.0;
-  const priorTemp = opts.priorTemp ?? 0.8;
+  const priorTemp = opts.priorTemp ?? opts.temperature ?? 0.8;
+  const passes = opts.passes ?? 0;
+  const komi = opts.komi ?? 0;
   const rng = opts.rng ?? Math.random;
+
+  if (passes >= 2) return -1;
 
   const fb = toFastBoard(board);
   const buf = new Int32Array(fb.N);
@@ -157,8 +175,13 @@ function mctsChooseMove(board, colour, p, opts = {}) {
   }
   if (!finite.length) return -1;
 
+  // Passing has no stone cost. Keeping it in the prior makes Delta affect
+  // whether to play, instead of cancelling as a constant in every score.
+  finite.push([-1, opts.passThreshold ?? 2.5]);
+
   const best = Math.min(...finite.map(x => x[1]));
-  const weights = finite.map(([, s]) => Math.exp(-(s - best) / priorTemp));
+  const weights = finite.map(([, s]) => priorTemp <= 1e-9
+    ? (s === best ? 1 : 0) : Math.exp(-(s - best) / priorTemp));
   const wsum = weights.reduce((a, b) => a + b, 0);
 
   const root = new MctsNode(1);
@@ -169,26 +192,25 @@ function mctsChooseMove(board, colour, p, opts = {}) {
   // ---- search ------------------------------------------------------------
   const t0 = Date.now();
   let iters = 0;
-  while (Date.now() - t0 < budgetMs) {
-    for (let b = 0; b < 16; b++) iterate(root, fb, colour, buf, rng);
-    iters += 16;
+  while (iters < maxIterations && Date.now() - t0 < budgetMs) {
+    iterate(root, fb, colour, buf, rng, passes, komi);
+    iters++;
   }
 
   // ---- pick the most-visited child --------------------------------------
   let bestK = -1, bestN = -1;
   for (let k = 0; k < root.kids.length; k++) {
-    if (root.kids[k].n > bestN) { bestN = root.kids[k].n; bestK = k; }
+    if (root.kids[k].n > bestN ||
+        (root.kids[k].n === bestN && root.kids[k].prior > root.kids[bestK].prior)) {
+      bestN = root.kids[k].n; bestK = k;
+    }
   }
   if (bestK < 0) return -1;
 
   const chosen = root.kids[bestK];
-  // resign-ish: if every line loses badly and the physics score says nothing is
-  // worth a stone either, pass rather than fill our own position
-  if (chosen.n > 30 && -chosen.q < -0.92 && best > 0) return -1;
-
   mctsChooseMove.lastStats = {
     iterations: iters,
-    winRate: (1 - chosen.q) / 2,        // from the mover's point of view
+    winRate: chosen.n ? (1 - chosen.q) / 2 : null, // mover's perspective
     visits: bestN,
     children: root.kids.length,
   };
